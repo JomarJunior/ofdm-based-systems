@@ -14,7 +14,7 @@ class IPrefixScheme(ABC):
 
     @property
     @abstractmethod
-    def prefix_acronym(self) -> str:
+    def acronym(self) -> str:
         pass
 
     @abstractmethod
@@ -28,7 +28,7 @@ class IPrefixScheme(ABC):
 
 class CyclicPrefixScheme(IPrefixScheme):
     @property
-    def prefix_acronym(self) -> str:
+    def acronym(self) -> str:
         return "CP"
 
     def add_prefix(self, symbols: NDArray[np.complex128]) -> NDArray[np.complex128]:
@@ -51,7 +51,7 @@ class CyclicPrefixScheme(IPrefixScheme):
 
 class ZeroPaddingPrefixScheme(IPrefixScheme):
     @property
-    def prefix_acronym(self) -> str:
+    def acronym(self) -> str:
         return "ZP"
 
     def add_prefix(self, symbols: NDArray[np.complex128]) -> NDArray[np.complex128]:
@@ -100,7 +100,7 @@ class ZeroPaddingPrefixScheme(IPrefixScheme):
 
 class NoPrefixScheme(IPrefixScheme):
     @property
-    def prefix_acronym(self) -> str:
+    def acronym(self) -> str:
         return ""
 
     def add_prefix(self, symbols: NDArray[np.complex128]) -> NDArray[np.complex128]:

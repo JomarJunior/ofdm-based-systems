@@ -1,10 +1,20 @@
-import re
-from typing import BinaryIO, List, Optional
+from io import BytesIO
+from typing import Any, BinaryIO, Dict, List, Optional
 import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
 
 from numpy.typing import NDArray
 from ofdm_based_systems.bits_generation.models import IGenerator, RandomBitsGenerator
 from ofdm_based_systems.channel.models import ChannelModel
+from ofdm_based_systems.configuration.enums import (
+    ConstellationType,
+    EqualizationMethod,
+    ModulationType,
+    NoiseType,
+    PrefixType,
+)
+from ofdm_based_systems.configuration.models import SimulationSettings
 from ofdm_based_systems.constellation.models import (
     IConstellationMapper,
     PSKConstellationMapper,
@@ -44,44 +54,44 @@ def read_bits_from_stream(stream: BinaryIO) -> List[int]:
 
 class Simulation:
     CONSTELLATION_SCHEME_MAPPERS = {
-        "QAM": QAMConstellationMapper,
-        "PSK": PSKConstellationMapper,
+        ConstellationType.QAM: QAMConstellationMapper,
+        ConstellationType.PSK: PSKConstellationMapper,
     }
 
     MODULATOR_SCHEME_MAPPERS = {
-        "OFDM": OFDMModulator,
-        "SC-OFDM": SingleCarrierOFDMModulator,
+        ModulationType.OFDM: OFDMModulator,
+        ModulationType.SC_OFDM: SingleCarrierOFDMModulator,
     }
 
     PREFIX_SCHEME_MAPPERS = {
-        "None": NoPrefixScheme,
-        "CP": CyclicPrefixScheme,
-        "ZP": ZeroPaddingPrefixScheme,
+        PrefixType.NONE: NoPrefixScheme,
+        PrefixType.CYCLIC: CyclicPrefixScheme,
+        PrefixType.ZERO: ZeroPaddingPrefixScheme,
     }
 
     EQUALIZATOR_SCHEME_MAPPERS = {
-        "None": NoEqualizator,
-        "ZF": ZeroForcingEqualizator,
-        "MMSE": MMSEEqualizator,
+        EqualizationMethod.NONE: NoEqualizator,
+        EqualizationMethod.ZF: ZeroForcingEqualizator,
+        EqualizationMethod.MMSE: MMSEEqualizator,
     }
 
     NOISE_SCHEME_MAPPERS = {
-        "AWGN": AWGNoiseModel,
-        "None": NoNoiseModel,
+        NoiseType.AWGN: AWGNoiseModel,
+        NoiseType.NONE: NoNoiseModel,
     }
 
     def __init__(
         self,
-        num_bits: Optional[int],
-        num_symbols: Optional[int],
-        num_subcarriers: int,
-        constellation_order: int = 64,
-        constellation_scheme: str = "QAM",
-        modulator_type: str = "OFDM",
-        prefix_scheme: str = "ZP",
-        equalizator_type: str = "MMSE",
-        snr_db: float = 0.0,
-        noise_scheme: str = "AWGN",
+        num_bits: Optional[int] = None,
+        num_symbols: Optional[int] = 1_000_000,
+        num_subcarriers: int = 64,
+        constellation_order: int = 16,
+        constellation_scheme: ConstellationType = ConstellationType.QAM,
+        modulator_type: ModulationType = ModulationType.OFDM,
+        prefix_scheme: PrefixType = PrefixType.CYCLIC,
+        equalizator_type: EqualizationMethod = EqualizationMethod.MMSE,
+        snr_db: float = 20.0,
+        noise_scheme: NoiseType = NoiseType.AWGN,
     ):
         if num_bits is None and num_symbols is None:
             raise ValueError("Either num_bits or num_symbols must be provided.")
@@ -99,7 +109,29 @@ class Simulation:
         self.snr_db = snr_db
         self.noise_scheme = noise_scheme
 
-    def run(self):
+    @classmethod
+    def create_from_simulation_settings(
+        cls, simulation_settings: SimulationSettings
+    ) -> List["Simulation"]:
+        simulations = []
+        for snr in simulation_settings.signal_noise_ratios:
+            simulation = cls(
+                num_bits=simulation_settings.num_bits,
+                num_symbols=simulation_settings.num_symbols,
+                num_subcarriers=simulation_settings.num_bands,
+                constellation_order=simulation_settings.constellation_order,
+                constellation_scheme=simulation_settings.constellation_type,
+                modulator_type=simulation_settings.modulation_type,
+                prefix_scheme=simulation_settings.prefix_type,
+                equalizator_type=simulation_settings.equalization_method,
+                snr_db=snr,
+                noise_scheme=simulation_settings.noise_type,
+            )
+            simulations.append(simulation)
+        return simulations
+
+    def run(self) -> Dict[str, Any]:
+        results = {}
         print("=" * 50)
         print("Starting OFDM-based System Simulation")
         print("=" * 50)
@@ -131,7 +163,7 @@ class Simulation:
 
         # Prefix Scheme
         prefix_scheme = self.PREFIX_SCHEME_MAPPERS.get(self.prefix_scheme, NoPrefixScheme)(
-            prefix_length=channel.order if self.prefix_scheme != "None" else 0
+            prefix_length=channel.order if self.prefix_scheme != PrefixType.NONE else 0
         )
         # Equalizator
         equalizator = self.EQUALIZATOR_SCHEME_MAPPERS.get(self.equalizator_type, NoEqualizator)(
@@ -146,6 +178,29 @@ class Simulation:
             num_subcarriers=self.num_subcarriers,
             prefix_scheme=prefix_scheme,
             equalizator=equalizator,
+        )
+
+        results.update(
+            {
+                "num_bits": self.num_bits,
+                "num_symbols": self.num_symbols,
+                "num_subcarriers": self.num_subcarriers,
+                "constellation_order": self.constellation_order,
+                "constellation_scheme": self.constellation_scheme.name,
+                "modulator_type": self.modulator_type.name,
+                "prefix_scheme": self.prefix_scheme.name,
+                "equalizator_type": self.equalizator_type.name,
+                "snr_db": self.snr_db,
+                "noise_scheme": self.noise_scheme.name,
+                "title": (
+                    f"{prefix_scheme.acronym}-"
+                    f"{self.modulator_type.name}-{self.equalizator_type.name}"
+                ),
+                "subtitle": (
+                    f"{self.constellation_order}{self.constellation_scheme.name}-"
+                    f"SNR{self.snr_db}dB"
+                ),
+            }
         )
 
         print("=" * 50)
@@ -189,6 +244,14 @@ class Simulation:
         modulated_signal = modulator.modulate(parallel_data)
 
         print(f"Modulated Signal Shape: {modulated_signal.shape}")
+
+        # Calculate PAPR
+        power_signal = np.abs(modulated_signal) ** 2
+        peak_power = np.max(power_signal)
+        avg_power = np.mean(power_signal)
+        papr_db = 10 * np.log10(peak_power / avg_power) if avg_power > 0 else float("inf")
+        print(f"PAPR: {papr_db:.2f} dB")
+        results.update({"papr_db": papr_db})
 
         print("=" * 50)
         print("Parallel to Serial Conversion...")
@@ -240,5 +303,74 @@ class Simulation:
         print(f"Bit Errors: {bit_errors} out of {total_bits} bits")
         print(f"Bit Error Rate (BER): {ber:.6f}")
         print("=" * 50)
+        results.update(
+            {
+                "bit_errors": bit_errors,
+                "total_bits": total_bits,
+                "bit_error_rate": ber,
+            }
+        )
+
+        # Generate plot image and store in results
+
+        # Clear previous plots
+        plt.clf()
+        plt.cla()
+
+        plt.figure(figsize=(8, 8))
+
+        # Plot received Symbols
+        plt.scatter(
+            demodulated_serial_data.real,
+            demodulated_serial_data.imag,
+            color="blue",
+            marker=".",
+            alpha=0.1,
+            label="Received Symbols",
+        )
+
+        # Plot the constellation diagram
+        ideal_points = constellation_mapper.constellation
+        plt.scatter(
+            ideal_points.real,
+            ideal_points.imag,
+            color="red",
+            marker="o",
+            label="Ideal Constellation Points",
+        )
+
+        # Set plot attributes
+        plt.title(f"{results['title']}")
+        plt.xlabel("In-Phase")
+        plt.ylabel("Quadrature")
+        plt.axhline(0, color="black", lw=0.5)
+        plt.axvline(0, color="black", lw=0.5)
+        plt.legend(loc="upper right")
+        plt.grid(True)
+        plt.xlim([-1.5, 1.5])
+        plt.ylim([-1.5, 1.5])
+        plt.axis("equal")
+
+        # Add text box with BER, SNR, and PAPR
+        textstr = f"BER: {ber:.6f}\n" f"SNR: {self.snr_db} dB\n" f"PAPR: {papr_db:.2f} dB"
+        plt.gcf().text(0.15, 0.75, textstr, fontsize=10, bbox=dict(facecolor="white", alpha=0.5))
+        plt.tight_layout()
+
+        # Save the plot to a BytesIO object
+        img_buffer = BytesIO()
+        plt.savefig(img_buffer, format="png")
+        img_buffer.seek(0)
+
+        # Load the image from the BytesIO object
+        image = Image.open(img_buffer)
+        results["constellation_plot"] = image
+
+        # Close the plot to free memory
+        plt.close()
+
+        # Close the bits stream
+        bits.close()
 
         print("Simulation completed.")
+
+        return results

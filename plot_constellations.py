@@ -25,7 +25,6 @@ def binary_representation(index: int, bits_per_symbol: int) -> str:
 def plot_constellation(ax, constellation_mapper, title, no_power=False):
     """Plot a constellation with binary word labels."""
     constellation = constellation_mapper.constellation
-    word_coder = constellation_mapper.word_coder
     bits_per_symbol = constellation_mapper.bits_per_symbol
 
     # Calculate constellation power (average energy)
