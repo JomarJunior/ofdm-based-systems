@@ -1,0 +1,10 @@
+.coverage
+.venv/
+.pytest_cache/
+__pycache__/
+*.aux
+*.log
+*.fdb_latexmk
+*.fls
+*.pdf
+*.synctex.gz
