@@ -1,0 +1,372 @@
+\documentclass[conference]{IEEEtran}
+% Add the compsoc option for Computer Society conferences.
+%
+% If IEEEtran.cls has not been installed into the LaTeX system files,
+% manually specify the path to it like:
+% \documentclass[conference]{../sty/IEEEtran}
+
+% Some very useful LaTeX packages include:
+% (uncomment the ones you want to load)
+
+% *** MISC UTILITY PACKAGES ***
+%\usepackage{ifpdf}
+% Heiko Oberdiek's ifpdf.sty is very useful if you need conditional
+% compilation based on whether the output is pdf or dvi.
+% usage:
+% \ifpdf
+%   % pdf code
+% \else
+%   % dvi code
+% \fi
+
+% *** CITATION PACKAGES ***
+\usepackage{cite}
+% cite.sty was written by Donald Arseneau
+% V1.6 and later of IEEEtran pre-defines the format of the cite.sty package
+% \cite{} output to follow that of the IEEE. Loading the cite package will
+% result in citation numbers being automatically sorted and properly
+% "compressed/ranged". e.g., [1], [9], [2], [7], [5], [6] without using
+% cite.sty will become [1], [2], [5]--[7], [9] using cite.sty.
+
+% *** GRAPHICS RELATED PACKAGES ***
+\usepackage{graphicx}
+% declare the path(s) where your graphic files are
+% \graphicspath{{../pdf/}{../jpeg/}}
+% and their extensions so you won't have to specify these with
+% every instance of \includegraphics
+% \DeclareGraphicsExtensions{.pdf,.jpeg,.png}
+
+% *** MATH PACKAGES ***
+\usepackage{amsmath}
+% A popular package from the American Mathematical Society that provides
+% many useful and powerful commands for dealing with mathematics.
+
+% *** SPECIALIZED LIST PACKAGES ***
+%\usepackage{algorithmic}
+% algorithmic.sty was written by Peter Williams and Rogerio Brito.
+% This package provides an algorithmic environment for describing algorithms.
+% You can use the algorithmic environment in-text or within a figure
+% environment to provide for a floating algorithm.
+
+% *** ALIGNMENT PACKAGES ***
+%\usepackage{array}
+% Frank Mittelbach's and David Carlisle's array.sty patches and improves
+% the standard LaTeX2e array and tabular environments to provide better
+% appearance and additional user controls. As the default LaTeX2e table
+% generation code is lacking to the point of almost being broken with
+% respect to the quality of the end results, all users are strongly
+% advised to use an enhanced (at the very least that provided by array.sty)
+% set of table tools.
+
+% *** SUBFIGURE PACKAGES ***
+%\ifCLASSOPTIONcompsoc
+%  \usepackage[caption=false,font=normalsize,labelfont=sf,textfont=sf]{subfig}
+%\else
+%  \usepackage[caption=false,font=footnotesize]{subfig}
+%\fi
+% subfig.sty, written by Steven Douglas Cochran, is the modern replacement
+% for subfigure.sty, the latter of which is no longer maintained and is
+% incompatible with some LaTeX packages including fixltx2e. However,
+% subfig.sty requires and automatically loads Axel Sommerfeldt's caption.sty
+% which will override IEEEtran.cls' handling of captions and this will result
+% in non-IEEE style figure/table captions. To prevent this problem, be sure
+% and invoke subfig.sty's "caption=false" package option.
+
+% *** FLOAT PACKAGES ***
+%\usepackage{fixltx2e}
+% fixltx2e, the successor to the earlier fix2col.sty, was written by
+% Frank Mittelbach and David Carlisle. This package corrects a few problems
+% in the LaTeX2e kernel, the most notable of which is that in current
+% LaTeX2e releases, the ordering of single and double column floats is not
+% guaranteed.
+
+%\usepackage{stfloats}
+% stfloats.sty was written by Sigitas Tolusis. This package gives LaTeX2e
+% the ability to do double column floats at the bottom of the page as well
+% as the top.
+
+% *** PDF, URL AND HYPERLINK PACKAGES ***
+%\usepackage{url}
+% url.sty was written by Donald Arseneau. It provides better support for
+% handling and breaking URLs. url.sty is already installed on most LaTeX
+% systems. The latest version and documentation can be obtained at:
+% http://www.ctan.org/pkg/url
+% Basically, \url{my_url_here}.
+
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  breakatwhitespace=true,
+  frame=single,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  commentstyle=\color{gray},
+  keywordstyle=\color{blue},
+  stringstyle=\color{orange}
+}
+
+% correct bad hyphenation here
+\hyphenation{op-tical net-works semi-conduc-tor}
+
+
+\begin{document}
+%
+% paper title
+% Titles are generally capitalized except for words such as a, an, and, as,
+% at, but, by, for, in, nor, of, on, or, the, to and up, which are usually
+% not capitalized unless they are the first or last word of the title.
+% Linebreaks \\ can be used within to get better formatting as desired.
+% Do not put math or special symbols in the title.
+\title{Orthogonal Frequency Division Multiplexing (OFDM) Based Systems}
+
+
+% author names and affiliations
+% use a multiple column layout for up to three different
+% affiliations
+\author{\IEEEauthorblockN{Jomar Júnior de Souza Pereira}
+\IEEEauthorblockA{Federal University of Rio de Janeiro\\
+Department of Electronic and Computer Engineering\\
+Rio de Janeiro, Brazil\\
+Email: jomarjunior@poli.ufrj.br}}
+
+% conference papers do not typically use \thanks and this command
+% is locked out in conference mode. If really needed, such as for
+% the acknowledgment of grants, issue a \IEEEoverridecommandlockouts
+% after \documentclass
+
+% for over three affiliations, or if they all won't fit within the width
+% of the page, use this alternative format:
+% 
+%\author{\IEEEauthorblockN{Michael Shell\IEEEauthorrefmark{1},
+%Homer Simpson\IEEEauthorrefmark{2},
+%James Kirk\IEEEauthorrefmark{3}, 
+%Montgomery Scott\IEEEauthorrefmark{3} and
+%Eldon Tyrell\IEEEauthorrefmark{4}}
+%\IEEEauthorblockA{\IEEEauthorrefmark{1}School of Electrical and Computer Engineering\\
+%Georgia Institute of Technology,
+%Atlanta, Georgia 30332--0250\\ Email: see http://www.michaelshell.org/contact.html}
+%\IEEEauthorblockA{\IEEEauthorrefmark{2}Twentieth Century Fox, Springfield, USA\\
+%Email: homer@thesimpsons.com}
+%\IEEEauthorblockA{\IEEEauthorrefmark{3}Starfleet Academy, San Francisco, California 96678-2391\\
+%Telephone: (800) 555--1212, Fax: (888) 555--1212}
+%\IEEEauthorblockA{\IEEEauthorrefmark{4}Tyrell Inc., 123 Replicant Street, Los Angeles, California 90210--4321}}
+
+% make the title area
+\maketitle
+
+% As a general rule, do not put math, special symbols or citations
+% in the abstract
+\begin{abstract}
+The abstract goes here.
+\end{abstract}
+
+% no keywords
+\begin{IEEEkeywords}
+wireless communications, OFDM, LTE, 5G, 6G, simulation, python
+\end{IEEEkeywords}
+
+
+% For peer review papers, you can put extra information on the cover
+% page as needed:
+% \ifCLASSOPTIONpeerreview
+% \begin{center} \bfseries EDICS Category: 3-BBND \end{center}
+% \fi
+%
+% For peerreview papers, this IEEEtran command inserts a page break and
+% creates the second title. It will be ignored for other modes.
+\IEEEpeerreviewmaketitle
+
+
+
+\section{Introduction}
+% An example of a floating figure using the graphicx package.
+% Note that \label must occur AFTER (or within) \caption.
+% For figures, \caption should occur after the \includegraphics.
+% Note that IEEEtran v1.7 and later has special internal code that
+% is designed to preserve the operation of \label within \caption
+% even when the captionsoff option is in effect. However, because
+% of issues like this, it may be the safest practice to put all your
+% \label just after \caption rather than within \caption{}.
+%
+% Reminder: the "draftcls" or "draftclsnofoot", not "draft", class
+% option should be used if it is desired that the figures are to be
+% displayed while in draft mode.
+%
+%\begin{figure}[!t]
+%\centering
+%\includegraphics[width=2.5in]{myfigure}
+% where an .eps filename suffix will be assumed under latex, 
+% and a .pdf suffix will be assumed under pdflatex; or what has been
+% declared via \DeclareGraphicsExtensions.
+%\caption{Simulation results for the network.}
+%\label{fig_sim}
+%\end{figure}
+
+% Note that the IEEE typically puts floats only at the top, even when this
+% results in a large percentage of a column being occupied by floats.
+
+% An example of a double column floating figure using two subfigures.
+% (The subfig.sty package must be loaded for this to work.)
+% The subfigure \label commands are set within each subfloat command,
+% and the \label for the overall figure must come after \caption.
+% \hfil is used as a separator to get equal spacing.
+% Watch out that the combined width of all the subfigures on a 
+% line do not exceed the text width or a line break will occur.
+%
+%\begin{figure*}[!t]
+%\centering
+%\subfloat[Case I]{\includegraphics[width=2.5in]{box}%
+%\label{fig_first_case}}
+%\hfil
+%\subfloat[Case II]{\includegraphics[width=2.5in]{box}%
+%\label{fig_second_case}}
+%\caption{Simulation results for the network.}
+%\label{fig_sim}
+%\end{figure*}
+%
+% Note that often IEEE papers with subfigures do not employ subfigure
+% captions (using the optional argument to \subfloat[]), but instead will
+% reference/describe all of them (a), (b), etc., within the main caption.
+% Be aware that for subfig.sty to generate the (a), (b), etc., subfigure
+% labels, the optional argument to \subfloat must be present. If a
+% subcaption is not desired, just leave its contents blank,
+% e.g., \subfloat[].
+
+% An example of a floating table. Note that, for IEEE style tables, the
+% \caption command should come BEFORE the table and, given that table
+% captions serve much like titles, are usually capitalized except for words
+% such as a, an, and, as, at, but, by, for, in, nor, of, on, or, the, to
+% and up, which are usually not capitalized unless they are the first or
+% last word of the caption. Table text will default to \footnotesize as
+% the IEEE normally uses this smaller font for tables.
+% The \label must come after \caption as always.
+%
+%\begin{table}[!t]
+%% increase table row spacing, adjust to taste
+%\renewcommand{\arraystretch}{1.3}
+% if using array.sty, it might be a good idea to tweak the value of
+% \extrarowheight as needed to properly center the text within the cells
+%\caption{An Example of a Table}
+%\label{table_example}
+%\centering
+%% Some packages, such as MDW tools, offer better commands for making tables
+%% than the plain LaTeX2e tabular which is used here.
+%\begin{tabular}{|c||c|}
+%\hline
+%One & Two\\
+%\hline
+%Three & Four\\
+%\hline
+%\end{tabular}
+%\end{table}
+
+As the years go by, the demand for higher data rates \textbf{is shifting} from traditional desktop and laptop computers to mobile devices such as \textbf{smartphones and tablets}. Since 2016, the number of mobile devices has surpassed that of desktop and laptop computers \cite{2016-turn}. This trend continues as new applications requiring high throughput and low latency, such as augmented reality (AR), virtual reality (VR), and the Internet of Things (IoT), emerge. As of 2025, there are approximately \textbf{7.43 billion mobile devices} worldwide \cite{2025-mobile}, and about \textbf{60\% of the global population} has access to mobile Internet \cite{2025-internet}. Meeting this demand requires wireless communication systems that can effectively address \textbf{multipath propagation} and \textbf{inter-symbol interference (ISI)}.
+
+Consider a scenario where a transmitter sends a signal to a receiver. In an ideal environment, the signal would propagate directly without distortion. In reality, reflections from buildings, trees, and other obstacles cause \textbf{multipath propagation}, leading to delayed and attenuated copies of the transmitted waveform. These overlapping copies produce \textbf{ISI}, degrading the received signal. The wireless channel can be modeled as a \textbf{linear time-invariant (LTI)} system characterized by its impulse response. Exciting the channel with a known \textbf{pilot signal} and observing the output allows estimating the frequency response:
+$$
+H(f) = \frac{Y(f)}{X(f)}
+$$
+where $H(f)$ represents the channel transfer function. With this response, the receiver can attempt to invert the channel through \textbf{equalization}; however, such processing becomes complex in fast-fading channels. \textbf{Multicarrier modulation (MCM)} simplifies this task by dividing the bandwidth into narrow subbands where the channel is approximately flat, allowing efficient per-subcarrier equalization. Among MCM techniques, \textbf{Orthogonal Frequency Division Multiplexing (OFDM)} is the most widely adopted, forming the foundation of standards such as Wi-Fi, LTE, and 5G. This paper explores OFDM-based systems such as, but not limited to, \textbf{Cyclic Prefix OFDM (CP-OFDM)} and \textbf{Single Carrier OFDM (SC-OFDM)}, discussing their principles, advantages, and applications through simulations implemented in Python.
+
+\section{Discrete OFDM Implementation}
+First, a stream of bits is generated and mapped to complex symbols using a modulation scheme such as \textbf{Quadrature Amplitude Modulation (QAM)} or \textbf{Phase Shift Keying (PSK)}. These symbols are then grouped into blocks, each containing $N$ symbols corresponding to $N$ subcarriers. The \textbf{Inverse Fast Fourier Transform (IFFT)} is applied to each block, this is the orthogonal modulation step. To mitigate ISI, a prefix is added to each OFDM symbol, typically a \textbf{Cyclic Prefix (CP)} or a \textbf{Zero Padding (ZP)}. The CP is a copy of the last $L$ samples of the OFDM symbol appended to its beginning, while ZP consists of $L$ zeros added at the end of the symbol. The choice of $L$ depends on the channel's order and should be at least equal to it. The blocks are serialized and transmitted over the channel where they may be affected by noise and multipath effects. At the receiver, the signal is deserialized into blocks, and the CP or ZP is removed. The \textbf{Fast Fourier Transform (FFT)} is then applied to recover the transmitted symbols, followed by demodulation to retrieve the original bit stream. Channel estimation and equalization may also be performed to mitigate channel effects.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.45\textwidth]{imgs/ofdm-block-diagram.png}
+    \caption{Basic OFDM System Block Diagram}
+    \label{fig:ofdm_block_diagram}
+\end{figure}
+
+Figure \ref{fig:ofdm_block_diagram} illustrates a basic OFDM system block diagram, highlighting the key components and processes involved in both the transmitter and receiver. Based on each building block, different OFDM variants can be implemented. For instance, \textbf{CP-OFDM} uses a cyclic prefix to combat ISI, while \textbf{SC-OFDM} employs single-carrier modulation with frequency-domain equalization to achieve similar benefits with lower peak-to-average power ratio (PAPR).
+
+\section{Code Structure}
+The OFDM simulation code is structured into several modules, each responsible for a specific aspect of the OFDM system. The main modules include:
+\begin{itemize}
+    \item \textbf{Bit Generation}: Generates bits for transmission.
+    \item \textbf{Constellation Mapping}: Maps bits to and from complex symbols using modulation schemes like QAM or PSK.
+    \item \textbf{OFDM Modulation}: Implements the IFFT and DFT operations as the orthogonal modulation step.
+    \item \textbf{Prefix Handling}: Adds and removes cyclic prefixes or zero padding.
+    \item \textbf{Channel Simulation}: Models the wireless channel, including multipath effects and noise.
+    \item \textbf{Equalization}: Performs Zero Forcing (ZF) or Minimum Mean Square Error (MMSE) equalization.
+    \item \textbf{Simulation}: Orchestrates the overall simulation process, including bit error rate (BER) calculations and plotting results.
+\end{itemize}
+It is written in Python 3.13 and utilizes libraries such as NumPy for numerical computations and matrix operations, and Matplotlib for plotting results. The code is modular, allowing easy modification and extension to explore different OFDM variants and channel conditions. This paper will walk through the implementation of each module.
+
+\section{Bit Generation}
+This module is responsible solely for generating a stream of bits for transmission. It could be as simple as generating random bits or more complex, such as reading from a file or generating specific patterns for testing purposes. The generated bits are then passed to the constellation mapping module for modulation. In our code, we define an interface `IGenerator` as a blueprint for any bit generator implementation. Below is an example implementation of a random bit generator using NumPy's random number generation capabilities.
+\newpage
+\begin{lstlisting}[language=Python, caption=Random Bits Generator Implementation, label=lst:random_bits_generator]
+#... import statements
+
+class RandomBitsGenerator(IGenerator):
+    """
+    Generates random bits using a specified random number generator.
+    Uses numpy's Generator for random number generation.
+    """
+
+    def __init__(self, generator: Generator = Generator(PCG64())):
+        self.generator = generator
+
+    def generate_bits(self, num_bits: int) -> BinaryIO:
+        num_bytes = math.ceil(num_bits / 8)
+
+        random_bytes = self.generator.bytes(num_bytes)
+
+        bits_to_keep = num_bits % 8
+        if bits_to_keep > 0:
+            mask = (0xFF << (8 - bits_to_keep)) & 0xFF
+
+            last_byte = random_bytes[-1] & mask
+            random_bytes = random_bytes[:-1] + bytes([last_byte])
+
+        bits_stream = BytesIO(random_bytes)
+        bits_stream.seek(0)
+        return bits_stream
+\end{lstlisting}
+
+\section{Constellation Mapping}
+This module handles the mapping of bits to complex symbols and vice versa. It supports various modulation schemes such as QAM and PSK. The mapping process involves grouping bits into symbols based on the modulation order. For example, in 16-QAM, each symbol represents 4 bits. The demapping process reverses this operation, converting received symbols back into bits. Below is an example implementation of a 16-QAM mapper and demapper.
+\begin{lstlisting}[language=Python, caption=16-QAM Mapper and Demapper Implementation, label=lst:16qam_mapper]
+\end{lstlisting}
+
+\section{Conclusion}
+The conclusion goes here.
+
+% use section* for acknowledgment
+\section*{Acknowledgment}
+The authors would like to thank...
+
+% trigger a \newpage just before the given reference
+% number - used to balance the columns on the last page
+% adjust value as needed - may need to be readjusted if
+% the document is modified later
+%\IEEEtriggeratref{8}
+% The "triggered" command can be changed if desired:
+%\IEEEtriggercmd{\enlargethispage{-5in}}
+
+% references section
+
+% can use a bibliography generated by BibTeX as a .bbl file
+% BibTeX documentation can be easily obtained at:
+% http://mirror.ctan.org/biblio/bibtex/contrib/doc/
+% The IEEEtran BibTeX style support page is at:
+% http://www.michaelshell.org/tex/ieeetran/bibtex/
+\bibliographystyle{IEEEtran}
+% argument is your BibTeX string definitions and bibliography database(s)
+\bibliography{IEEEabrv,references}
+%
+% <OR> manually copy in the resultant .bbl file
+% set second argument of \begin to the number of references
+% (used to reserve space for the reference number labels box)
+% \begin{thebibliography}{1}
+% \bibitem{IEEEhowto:kopka}
+% H.~Kopka and P.~W. Daly, \emph{A Guide to \LaTeX}, 3rd~ed.\hskip 1em plus
+%   0.5em minus 0.4em\relax Harlow, England: Addison-Wesley, 1999.
+% \end{thebibliography}
+
+\end{document}

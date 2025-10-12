@@ -1,0 +1,62 @@
+[project]
+name = "ofdm-based-systems"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "JomarJunior",email = "jomarjunior@poli.ufrj.br"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy (>=2.3.3,<3.0.0)",
+    "matplotlib (>=3.10.7,<4.0.0)",
+    "pylint (>=3.3.9,<4.0.0)",
+    "black (>=25.9.0,<26.0.0)",
+    "pytest (>=8.4.2,<9.0.0)",
+    "pytest-cov (>=7.0.0,<8.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages=[
+    { include = "ofdm-based-systems", from = "src" }
+]
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+skip-string-normalization = false
+
+[tool.pylint.main]
+# Enable basic linting
+load-plugins = ["pylint.extensions.mccabe", "pylint.extensions.docparams"]
+
+[tool.pylint.messages_control]
+disable = [
+    "C0114",  # missing-module-docstring
+    "C0115",  # missing-class-docstring
+    "C0116",  # missing-function-docstring
+    "R0903",  # too-few-public-methods
+]
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.jupyter]
+notebook_dir = "notebooks"
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["digital_transmission_essays"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "--cov=ofdm_based_systems --cov-report=term-missing"
+testpaths = ["tests"]

@@ -1,0 +1,35 @@
+@startuml "OFDM Block Diagram"
+title "OFDM Block Diagram"
+!theme plain
+skinparam Linetype ortho
+
+rectangle "Bit Stream" as bitstream #LightBlue
+rectangle "S/P Converter" as s2p
+rectangle "Constellation\nModulator" as modulator
+rectangle "IFFT" as ifft #LightCoral
+rectangle "Prefix\nAddition" as prefix
+rectangle "P/S\nConverter" as p2s
+rectangle "Channel\nTransmission" as channel
+rectangle "S/P\nConverter" as s2p_rx
+rectangle "Prefix\nRemoval" as prefix_removal
+rectangle "FFT" as fft #LightCoral
+rectangle "Equalizer" as equalizer
+rectangle "Constellation\nDemodulator" as demodulator
+rectangle "P/S\nConverter" as p2s_rx
+rectangle "Bit Stream" as bitstream_out #LightBlue
+
+bitstream -r-> modulator
+modulator -r-> s2p
+s2p -r-> ifft
+ifft -r-> prefix
+prefix -r-> p2s
+p2s .d.> channel
+channel .d.> s2p_rx
+s2p_rx -l-> prefix_removal
+prefix_removal -l-> fft
+fft -l-> equalizer
+equalizer -l-> p2s_rx
+p2s_rx -l-> demodulator
+demodulator -l-> bitstream_out
+
+@enduml
