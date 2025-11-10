@@ -49,3 +49,11 @@ class NoiseType(str, Enum):
 
     def __str__(self):
         return self.value
+
+
+class PowerAllocationType(str, Enum):
+    UNIFORM = "UNIFORM"
+    WATERFILLING = "WATERFILLING"
+
+    def __str__(self):
+        return self.value

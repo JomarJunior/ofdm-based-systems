@@ -1,0 +1,15 @@
+{
+    "num_bands": 64,
+    "signal_noise_ratios": [10, 15, 20, 25, 30],
+    "channel_model_path": "config/channel_models/severe_multipath.npy",
+    "channel_type": "CUSTOM",
+    "num_symbols": 100000,
+    "constellation_order": 16,
+    "constellation_type": "QAM",
+    "noise_type": "AWGN",
+    "prefix_length_ratio": 1.0,
+    "prefix_type": "CYCLIC",
+    "modulation_type": "OFDM",
+    "equalization_method": "MMSE",
+    "power_allocation_type": "WATERFILLING"
+}

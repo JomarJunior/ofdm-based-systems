@@ -1,4 +1,3 @@
-import os
 from io import BytesIO
 from typing import Any, BinaryIO, Dict, List, Optional
 
@@ -14,7 +13,6 @@ from ofdm_based_systems.configuration.enums import (
     EqualizationMethod,
     ModulationType,
     NoiseType,
-    PowerAllocationType,
     PrefixType,
 )
 from ofdm_based_systems.configuration.models import SimulationSettings
@@ -34,10 +32,6 @@ from ofdm_based_systems.modulation.models import (
     SingleCarrierOFDMModulator,
 )
 from ofdm_based_systems.noise.models import AWGNoiseModel, NoNoiseModel
-from ofdm_based_systems.power_allocation.models import (
-    UniformPowerAllocation,
-    WaterfillingPowerAllocation,
-)
 from ofdm_based_systems.prefix.models import (
     CyclicPrefixScheme,
     NoPrefixScheme,
@@ -87,11 +81,6 @@ class Simulation:
         NoiseType.NONE: NoNoiseModel,
     }
 
-    POWER_ALLOCATION_MAPPERS = {
-        PowerAllocationType.UNIFORM: UniformPowerAllocation,
-        PowerAllocationType.WATERFILLING: WaterfillingPowerAllocation,
-    }
-
     def __init__(
         self,
         num_bits: Optional[int] = None,
@@ -105,9 +94,6 @@ class Simulation:
         equalizator_type: EqualizationMethod = EqualizationMethod.MMSE,
         snr_db: float = 20.0,
         noise_scheme: NoiseType = NoiseType.AWGN,
-        power_allocation_type: PowerAllocationType = PowerAllocationType.UNIFORM,
-        channel_impulse_response: Optional[NDArray[np.complex128]] = None,
-        verbose: bool = True,
     ):
         if num_bits is None and num_symbols is None:
             raise ValueError("Either num_bits or num_symbols must be provided.")
@@ -125,50 +111,11 @@ class Simulation:
         self.equalizator_type = equalizator_type
         self.snr_db = snr_db
         self.noise_scheme = noise_scheme
-        self.power_allocation_type = power_allocation_type
-        self.channel_impulse_response = channel_impulse_response
-        self.verbose = verbose
-
-    def _log(self, message: str) -> None:
-        """Log message if verbose mode is enabled."""
-        if self.verbose:
-            print(message)
 
     @classmethod
     def create_from_simulation_settings(
         cls, simulation_settings: SimulationSettings
     ) -> List["Simulation"]:
-        """Create multiple simulations from settings.
-
-        Args:
-            simulation_settings: Configuration settings
-
-        Returns:
-            List of Simulation instances, one per SNR value
-        """
-        # Load channel impulse response if custom channel is specified
-        channel_impulse_response = None
-        if simulation_settings.channel_type.value == "CUSTOM":
-            channel_path = simulation_settings.channel_model_path
-            if not channel_path:
-                raise ValueError("channel_model_path must be specified when channel_type is CUSTOM")
-
-            # Handle relative paths from project root
-            if not channel_path.startswith("/"):
-                # Assume path is relative to current working directory
-                channel_path = os.path.abspath(channel_path)
-
-            if not os.path.exists(channel_path):
-                raise FileNotFoundError(f"Channel model file not found: {channel_path}")
-
-            try:
-                channel_impulse_response = np.load(channel_path)
-                print(f"✓ Loaded custom channel impulse response from: {channel_path}")
-                print(f"  Channel length: {len(channel_impulse_response)} taps")
-                print(f"  Channel dtype: {channel_impulse_response.dtype}")
-            except Exception as e:
-                raise ValueError(f"Failed to load channel model from {channel_path}: {e}")
-
         simulations = []
         for snr in simulation_settings.signal_noise_ratios:
             simulation = cls(
@@ -183,8 +130,6 @@ class Simulation:
                 equalizator_type=simulation_settings.equalization_method,
                 snr_db=snr,
                 noise_scheme=simulation_settings.noise_type,
-                power_allocation_type=simulation_settings.power_allocation_type,
-                channel_impulse_response=channel_impulse_response,
             )
             simulations.append(simulation)
         return simulations
@@ -207,25 +152,15 @@ class Simulation:
         noise_model = self.NOISE_SCHEME_MAPPERS.get(self.noise_scheme, AWGNoiseModel)()
 
         # Channel Model
-        if self.channel_impulse_response is not None:
-            # Use custom channel from configuration
-            channel_impulse_response: NDArray[np.complex128] = self.channel_impulse_response
-            self._log(
-                f"Using custom channel impulse response ({len(channel_impulse_response)} taps)"
-            )
-        else:
-            # Use default multipath channel (backward compatibility)
-            channel_impulse_response = np.array(
-                [
-                    (7.767824138452235072e-01 + 4.560896742466611919e-01j),
-                    (-6.669848996328063551e-02 + 2.839935704583463338e-01j),
-                    (1.398968327715586490e-01 - 1.591963958343969865e-01j),
-                    (2.229949514514480494e-02 + 2.409945439452868821e-01j),
-                ],
-                dtype=np.complex128,
-            )
-            self._log("Using default multipath channel (4 taps)")
-
+        channel_impulse_response: NDArray[np.complex128] = np.array(
+            [
+                (7.767824138452235072e-01 + 4.560896742466611919e-01j),
+                (-6.669848996328063551e-02 + 2.839935704583463338e-01j),
+                (1.398968327715586490e-01 - 1.591963958343969865e-01j),
+                (2.229949514514480494e-02 + 2.409945439452868821e-01j),
+            ],
+            dtype=np.complex128,
+        )
         channel: ChannelModel = ChannelModel(
             impulse_response=channel_impulse_response, snr_db=self.snr_db, noise_model=noise_model
         )
@@ -262,23 +197,16 @@ class Simulation:
                 "constellation_scheme": self.constellation_scheme.name,
                 "modulator_type": self.modulator_type.name,
                 "prefix_scheme": self.prefix_scheme.name,
-                "prefix_acronym": prefix_scheme.acronym,
                 "equalizator_type": self.equalizator_type.name,
                 "snr_db": self.snr_db,
                 "noise_scheme": self.noise_scheme.name,
-                "power_allocation_type": self.power_allocation_type.name,
-                "power_allocation_acronym": (
-                    "WF"
-                    if self.power_allocation_type == PowerAllocationType.WATERFILLING
-                    else "UNIFORM"
-                ),
                 "title": (
                     f"{prefix_scheme.acronym}-"
                     f"{self.modulator_type.name}-{self.equalizator_type.name}"
                 ),
                 "subtitle": (
                     f"{self.constellation_order}{self.constellation_scheme.name}-"
-                    f"SNR{self.snr_db}dB-{self.power_allocation_type.name}"
+                    f"SNR{self.snr_db}dB"
                 ),
             }
         )
@@ -317,36 +245,6 @@ class Simulation:
         )
 
         print(f"Parallel Data Shape: {parallel_data.shape}")
-
-        # Power Allocation
-        print("=" * 50)
-        print(f"Applying Power Allocation ({self.power_allocation_type.name})...")
-        print("=" * 50)
-
-        channel_frequency_response = np.fft.fft(channel_impulse_response, self.num_subcarriers)
-        channel_gains = np.abs(channel_frequency_response) ** 2
-        noise_power = 10 ** (-self.snr_db / 10)
-
-        if self.power_allocation_type == PowerAllocationType.WATERFILLING:
-            power_allocator = WaterfillingPowerAllocation(
-                total_power=1.0,
-                channel_gains=channel_gains,
-                noise_power=noise_power,
-            )
-        else:
-            power_allocator = UniformPowerAllocation(
-                total_power=1.0,
-                num_subcarriers=self.num_subcarriers,
-            )
-
-        power_allocation = power_allocator.allocate()
-        self._log(
-            f"Power allocation computed: min={power_allocation.min():.6f}, max={power_allocation.max():.6f}"
-        )
-
-        # Apply power allocation to parallel data
-        parallel_data = parallel_data * np.sqrt(power_allocation)
-        results["allocated_power"] = power_allocation.tolist()
 
         print("=" * 50)
         print("OFDM-based Modulation")
@@ -391,15 +289,6 @@ class Simulation:
         print("=" * 50)
         demodulated_data = modulator.demodulate(received_parallel_signal)
         print(f"Demodulated Data Shape: {demodulated_data.shape}")
-
-        # Compensate for power allocation
-        print("=" * 50)
-        print("Compensating for Power Allocation...")
-        print("=" * 50)
-        power_sqrt = np.sqrt(power_allocation)
-        power_sqrt[power_sqrt < 1e-10] = 1.0  # Avoid division by near-zero
-        demodulated_data = demodulated_data / power_sqrt
-        self._log("Power allocation compensation applied")
 
         print("=" * 50)
         print("Parallel to Serial Conversion of Demodulated Data...")

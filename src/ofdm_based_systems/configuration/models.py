@@ -3,12 +3,14 @@ import os
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
+
 from ofdm_based_systems.configuration.enums import (
     ChannelType,
     ConstellationType,
     EqualizationMethod,
     ModulationType,
     NoiseType,
+    PowerAllocationType,
     PrefixType,
 )
 
@@ -72,6 +74,10 @@ class SimulationSettings(BaseSettings):
     modulation_type: ModulationType = Field(
         ModulationType.OFDM, description="Type of modulation (e.g., OFDM or SC-OFDM)"
     )
+    power_allocation_type: PowerAllocationType = Field(
+        PowerAllocationType.UNIFORM,
+        description="Type of power allocation strategy (e.g., UNIFORM or WATERFILLING)",
+    )
 
     def __str__(self):
         return (
@@ -89,7 +95,8 @@ class SimulationSettings(BaseSettings):
             f"Prefix Type: {self.prefix_type}\n"
             f"Prefix Length Ratio: {self.prefix_length_ratio}\n"
             f"Equalization Method: {self.equalization_method}\n"
-            f"Modulation Type: {self.modulation_type}"
+            f"Modulation Type: {self.modulation_type}\n"
+            f"Power Allocation Type: {self.power_allocation_type}"
         )
 
     @field_validator("num_symbols")
@@ -106,4 +113,5 @@ class SimulationSettings(BaseSettings):
     def validate_prefix_length_ratio(cls, v):
         if not 0.0 <= v <= 1.0:
             raise ValueError("prefix_length_ratio must be between 0 and 1 (inclusive).")
+        return v
         return v
