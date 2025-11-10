@@ -5,7 +5,7 @@ from io import BytesIO
 from unittest.mock import Mock, patch
 
 import pytest
-from numpy.random import Generator, PCG64
+from numpy.random import PCG64, Generator
 
 from ofdm_based_systems.bits_generation.models import IGenerator, RandomBitsGenerator
 
@@ -20,6 +20,7 @@ class TestIGenerator:
 
     def test_igenerator_requires_generate_bits_implementation(self):
         """Test that subclasses must implement generate_bits method."""
+
         class IncompleteGenerator(IGenerator):
             pass
 
@@ -28,6 +29,7 @@ class TestIGenerator:
 
     def test_igenerator_can_be_subclassed(self):
         """Test that IGenerator can be properly subclassed."""
+
         class ConcreteGenerator(IGenerator):
             def generate_bits(self, num_bits: int) -> BytesIO:
                 return BytesIO(b"\x00")
@@ -40,14 +42,15 @@ class TestIGenerator:
     def test_igenerator_abstract_method_signature(self):
         """Test that abstract method has correct signature."""
         import inspect
+
         method = IGenerator.generate_bits
-        assert hasattr(method, '__isabstractmethod__')
+        assert hasattr(method, "__isabstractmethod__")
         assert method.__isabstractmethod__ is True
-        
+
         # Check method signature
         sig = inspect.signature(IGenerator.generate_bits)
         params = list(sig.parameters.keys())
-        assert 'num_bits' in params
+        assert "num_bits" in params
 
 
 class TestRandomBitsGeneratorInitialization:
@@ -68,7 +71,7 @@ class TestRandomBitsGeneratorInitialization:
         """Test initialization with seeded generator for reproducibility."""
         gen1 = RandomBitsGenerator(generator=Generator(PCG64(seed=12345)))
         gen2 = RandomBitsGenerator(generator=Generator(PCG64(seed=12345)))
-        
+
         # Same seed should produce same results
         bits1 = gen1.generate_bits(16)
         bits2 = gen2.generate_bits(16)
@@ -93,7 +96,7 @@ class TestRandomBitsGeneratorGenerateBits:
     def test_generate_bits_exact_byte_count(self):
         """Test generating bits that align exactly with byte boundaries."""
         generator = RandomBitsGenerator()
-        
+
         # Test multiples of 8 bits
         for num_bits in [8, 16, 24, 32, 64, 128]:
             result = generator.generate_bits(num_bits)
@@ -104,7 +107,7 @@ class TestRandomBitsGeneratorGenerateBits:
     def test_generate_bits_non_byte_aligned(self):
         """Test generating bits that don't align with byte boundaries."""
         generator = RandomBitsGenerator()
-        
+
         # Test non-multiples of 8 bits
         for num_bits in [1, 3, 5, 7, 9, 15, 17, 25]:
             result = generator.generate_bits(num_bits)
@@ -133,11 +136,11 @@ class TestRandomBitsGeneratorGenerateBits:
     def test_generate_bits_masking_for_non_byte_aligned(self):
         """Test that unused bits are properly masked to zero."""
         generator = RandomBitsGenerator(generator=Generator(PCG64(seed=42)))
-        
+
         # Generate 10 bits (1 byte + 2 bits)
         result = generator.generate_bits(10)
         data = result.read()
-        
+
         assert len(data) == 2
         # Last 6 bits of the second byte should be 0
         # Mask: 11000000 = 0xC0
@@ -147,18 +150,18 @@ class TestRandomBitsGeneratorGenerateBits:
     def test_generate_bits_various_sizes(self):
         """Test generating bits for various sizes."""
         generator = RandomBitsGenerator()
-        
+
         test_cases = [
-            (1, 1),    # 1 bit -> 1 byte
-            (2, 1),    # 2 bits -> 1 byte
-            (8, 1),    # 8 bits -> 1 byte
-            (9, 2),    # 9 bits -> 2 bytes
-            (16, 2),   # 16 bits -> 2 bytes
-            (17, 3),   # 17 bits -> 3 bytes
-            (100, 13), # 100 bits -> 13 bytes
-            (1000, 125), # 1000 bits -> 125 bytes
+            (1, 1),  # 1 bit -> 1 byte
+            (2, 1),  # 2 bits -> 1 byte
+            (8, 1),  # 8 bits -> 1 byte
+            (9, 2),  # 9 bits -> 2 bytes
+            (16, 2),  # 16 bits -> 2 bytes
+            (17, 3),  # 17 bits -> 3 bytes
+            (100, 13),  # 100 bits -> 13 bytes
+            (1000, 125),  # 1000 bits -> 125 bytes
         ]
-        
+
         for num_bits, expected_bytes in test_cases:
             result = generator.generate_bits(num_bits)
             data = result.read()
@@ -185,7 +188,7 @@ class TestRandomBitsGeneratorGenerateBits:
         seed = 999
         gen1 = RandomBitsGenerator(generator=Generator(PCG64(seed=seed)))
         gen2 = RandomBitsGenerator(generator=Generator(PCG64(seed=seed)))
-        
+
         for num_bits in [8, 15, 32, 100]:
             bits1 = gen1.generate_bits(num_bits).read()
             bits2 = gen2.generate_bits(num_bits).read()
@@ -194,10 +197,10 @@ class TestRandomBitsGeneratorGenerateBits:
     def test_generate_bits_randomness(self):
         """Test that different calls produce different random bits."""
         generator = RandomBitsGenerator()
-        
+
         # Generate multiple sequences
         sequences = [generator.generate_bits(64).read() for _ in range(10)]
-        
+
         # Check that not all sequences are identical
         # (statistically extremely unlikely with proper RNG)
         unique_sequences = set(sequences)
@@ -210,13 +213,12 @@ class TestRandomBitsGeneratorByteCalculation:
     def test_byte_calculation_formula(self):
         """Test that byte calculation follows ceil(num_bits / 8) formula."""
         generator = RandomBitsGenerator()
-        
+
         for num_bits in range(0, 100):
             result = generator.generate_bits(num_bits)
             actual_bytes = len(result.read())
             expected_bytes = math.ceil(num_bits / 8) if num_bits > 0 else 0
-            assert actual_bytes == expected_bytes, \
-                f"Byte calculation failed for {num_bits} bits"
+            assert actual_bytes == expected_bytes, f"Byte calculation failed for {num_bits} bits"
 
 
 class TestRandomBitsGeneratorMaskingLogic:
@@ -226,46 +228,44 @@ class TestRandomBitsGeneratorMaskingLogic:
         """Test that masking correctly preserves only requested bits."""
         # Use seeded generator for deterministic testing
         generator = RandomBitsGenerator(generator=Generator(PCG64(seed=777)))
-        
+
         # Generate full byte then partial byte
         full_result = generator.generate_bits(8)
         full_byte = full_result.read()[0]
-        
+
         # Reset generator with same seed
         generator = RandomBitsGenerator(generator=Generator(PCG64(seed=777)))
-        
+
         # Generate same byte but request fewer bits
         for bits_to_keep in range(1, 8):
             generator_test = RandomBitsGenerator(generator=Generator(PCG64(seed=777)))
             partial_result = generator_test.generate_bits(bits_to_keep)
             partial_byte = partial_result.read()[0]
-            
+
             # Create expected mask
             mask = (0xFF << (8 - bits_to_keep)) & 0xFF
             expected_byte = full_byte & mask
-            
-            assert partial_byte == expected_byte, \
-                f"Masking failed for {bits_to_keep} bits"
+
+            assert partial_byte == expected_byte, f"Masking failed for {bits_to_keep} bits"
 
     def test_masking_zeros_unused_bits(self):
         """Test that unused bits in last byte are always zero."""
         generator = RandomBitsGenerator()
-        
+
         for num_bits in range(1, 64):
             bits_in_last_byte = num_bits % 8
             if bits_in_last_byte == 0:
                 continue  # Skip byte-aligned cases
-            
+
             result = generator.generate_bits(num_bits)
             data = result.read()
             last_byte = data[-1]
-            
+
             # Calculate which bits should be zero
             num_zero_bits = 8 - bits_in_last_byte
             zero_mask = (1 << num_zero_bits) - 1  # Mask for bits that should be 0
-            
-            assert last_byte & zero_mask == 0, \
-                f"Unused bits not zero for {num_bits} bits"
+
+            assert last_byte & zero_mask == 0, f"Unused bits not zero for {num_bits} bits"
 
 
 class TestRandomBitsGeneratorEdgeCases:
@@ -283,12 +283,12 @@ class TestRandomBitsGeneratorEdgeCases:
     def test_consecutive_calls_independent(self):
         """Test that consecutive calls produce independent results."""
         generator = RandomBitsGenerator()
-        
+
         results = []
         for _ in range(5):
             result = generator.generate_bits(32)
             results.append(result.read())
-        
+
         # Check that results are different (statistically)
         unique_results = set(results)
         assert len(unique_results) > 1
@@ -297,13 +297,13 @@ class TestRandomBitsGeneratorEdgeCases:
         """Test that returned BytesIO stream is seekable."""
         generator = RandomBitsGenerator()
         result = generator.generate_bits(16)
-        
+
         # Read first byte
         first_byte = result.read(1)
-        
+
         # Seek back to start
         result.seek(0)
-        
+
         # Read again and verify
         first_byte_again = result.read(1)
         assert first_byte == first_byte_again
@@ -312,11 +312,11 @@ class TestRandomBitsGeneratorEdgeCases:
         """Test that stream can be read multiple times after seeking."""
         generator = RandomBitsGenerator()
         result = generator.generate_bits(24)
-        
+
         data1 = result.read()
         result.seek(0)
         data2 = result.read()
-        
+
         assert data1 == data2
         assert len(data1) == 3
 
@@ -328,10 +328,10 @@ class TestRandomBitsGeneratorIntegration:
         """Test that multiple generator instances are independent."""
         gen1 = RandomBitsGenerator()
         gen2 = RandomBitsGenerator()
-        
+
         bits1 = gen1.generate_bits(32).read()
         bits2 = gen2.generate_bits(32).read()
-        
+
         # Different unseeded generators should produce different results
         # (statistically extremely unlikely to be the same)
         assert bits1 != bits2
@@ -341,17 +341,17 @@ class TestRandomBitsGeneratorIntegration:
         seed = 12345
         gen1 = RandomBitsGenerator(generator=Generator(PCG64(seed=seed)))
         gen2 = RandomBitsGenerator(generator=Generator(PCG64(seed=seed)))
-        
+
         # First call
         bits1_call1 = gen1.generate_bits(16).read()
         bits2_call1 = gen2.generate_bits(16).read()
         assert bits1_call1 == bits2_call1
-        
+
         # Second call - should still match because state advances identically
         bits1_call2 = gen1.generate_bits(16).read()
         bits2_call2 = gen2.generate_bits(16).read()
         assert bits1_call2 == bits2_call2
-        
+
         # But first and second calls should be different
         assert bits1_call1 != bits1_call2
 
@@ -359,7 +359,7 @@ class TestRandomBitsGeneratorIntegration:
         """Test that RandomBitsGenerator properly implements IGenerator."""
         generator = RandomBitsGenerator()
         assert isinstance(generator, IGenerator)
-        assert hasattr(generator, 'generate_bits')
+        assert hasattr(generator, "generate_bits")
         assert callable(generator.generate_bits)
 
 
@@ -369,38 +369,38 @@ class TestRandomBitsGeneratorMockingScenarios:
     def test_with_mocked_generator(self):
         """Test RandomBitsGenerator with a mocked numpy Generator."""
         mock_generator = Mock(spec=Generator)
-        mock_generator.bytes.return_value = b'\xFF\xFF'
-        
+        mock_generator.bytes.return_value = b"\xff\xff"
+
         generator = RandomBitsGenerator(generator=mock_generator)
         result = generator.generate_bits(16)
-        
+
         mock_generator.bytes.assert_called_once_with(2)
-        assert result.read() == b'\xFF\xFF'
+        assert result.read() == b"\xff\xff"
 
     def test_bytes_called_with_correct_size(self):
         """Test that Generator.bytes is called with correct byte count."""
         mock_generator = Mock(spec=Generator)
-        mock_generator.bytes.return_value = b'\x00\x00\x00'
-        
+        mock_generator.bytes.return_value = b"\x00\x00\x00"
+
         generator = RandomBitsGenerator(generator=mock_generator)
-        
+
         # Request 20 bits (needs 3 bytes)
         generator.generate_bits(20)
-        
+
         mock_generator.bytes.assert_called_once_with(3)
 
     def test_masking_applied_correctly(self):
         """Test that masking is applied correctly to generator output."""
         mock_generator = Mock(spec=Generator)
         # Return byte with all bits set
-        mock_generator.bytes.return_value = b'\xFF'
-        
+        mock_generator.bytes.return_value = b"\xff"
+
         generator = RandomBitsGenerator(generator=mock_generator)
-        
+
         # Request 5 bits (should mask to 11111000 = 0xF8)
         result = generator.generate_bits(5)
         data = result.read()
-        
+
         assert data[0] == 0xF8
 
 
@@ -410,29 +410,29 @@ class TestRandomBitsGeneratorBitPatterns:
     def test_all_zeros_possible(self):
         """Test that generator can produce all zeros (statistically rare)."""
         mock_generator = Mock(spec=Generator)
-        mock_generator.bytes.return_value = b'\x00\x00'
-        
+        mock_generator.bytes.return_value = b"\x00\x00"
+
         generator = RandomBitsGenerator(generator=mock_generator)
         result = generator.generate_bits(16)
-        
-        assert result.read() == b'\x00\x00'
+
+        assert result.read() == b"\x00\x00"
 
     def test_all_ones_possible(self):
         """Test that generator can produce all ones (statistically rare)."""
         mock_generator = Mock(spec=Generator)
-        mock_generator.bytes.return_value = b'\xFF\xFF'
-        
+        mock_generator.bytes.return_value = b"\xff\xff"
+
         generator = RandomBitsGenerator(generator=mock_generator)
         result = generator.generate_bits(16)
-        
-        assert result.read() == b'\xFF\xFF'
+
+        assert result.read() == b"\xff\xff"
 
     def test_mixed_pattern(self):
         """Test generator with mixed bit pattern."""
         mock_generator = Mock(spec=Generator)
-        mock_generator.bytes.return_value = b'\xAA\x55'  # 10101010 01010101
-        
+        mock_generator.bytes.return_value = b"\xaa\x55"  # 10101010 01010101
+
         generator = RandomBitsGenerator(generator=mock_generator)
         result = generator.generate_bits(16)
-        
-        assert result.read() == b'\xAA\x55'
+
+        assert result.read() == b"\xaa\x55"
