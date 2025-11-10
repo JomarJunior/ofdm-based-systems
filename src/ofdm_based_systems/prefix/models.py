@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
-from numpy.typing import NDArray
 import numpy as np
+from numpy.typing import NDArray
 
 
 class IPrefixScheme(ABC):
@@ -36,6 +36,9 @@ class CyclicPrefixScheme(IPrefixScheme):
             raise ValueError("Input symbols must be a 1D array.")
         if len(symbols) < self.prefix_length:
             raise ValueError("Input symbols length must be greater than prefix length.")
+
+        if self.prefix_length == 0:
+            return symbols
 
         prefix = symbols[-self.prefix_length :]
         return np.concatenate((prefix, symbols))

@@ -1,11 +1,10 @@
-from numpy.typing import NDArray
 import numpy as np
+from numpy.typing import NDArray
 
 
 class SerialToParallelConverter:
     @staticmethod
     def to_parallel(data: NDArray[np.complex128], num_streams: int) -> NDArray[np.complex128]:
-        print(f"Converting to parallel with {num_streams} streams.")
         if data.ndim != 1:
             raise ValueError("Input data must be a 1D array.")
         if num_streams <= 0:

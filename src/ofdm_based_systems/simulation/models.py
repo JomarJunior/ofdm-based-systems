@@ -1,10 +1,11 @@
 from io import BytesIO
 from typing import Any, BinaryIO, Dict, List, Optional
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
+from numpy.typing import NDArray
 from PIL import Image
 
-from numpy.typing import NDArray
 from ofdm_based_systems.bits_generation.models import IGenerator, RandomBitsGenerator
 from ofdm_based_systems.channel.models import ChannelModel
 from ofdm_based_systems.configuration.enums import (
@@ -83,12 +84,13 @@ class Simulation:
     def __init__(
         self,
         num_bits: Optional[int] = None,
-        num_symbols: Optional[int] = 1_000_000,
+        num_symbols: Optional[int] = None,
         num_subcarriers: int = 64,
         constellation_order: int = 16,
         constellation_scheme: ConstellationType = ConstellationType.QAM,
         modulator_type: ModulationType = ModulationType.OFDM,
         prefix_scheme: PrefixType = PrefixType.CYCLIC,
+        prefix_length_ratio: float = 1.0,  # should stay at 1.0
         equalizator_type: EqualizationMethod = EqualizationMethod.MMSE,
         snr_db: float = 20.0,
         noise_scheme: NoiseType = NoiseType.AWGN,
@@ -105,6 +107,7 @@ class Simulation:
         self.constellation_scheme = constellation_scheme
         self.modulator_type = modulator_type
         self.prefix_scheme = prefix_scheme
+        self.prefix_length_ratio = prefix_length_ratio
         self.equalizator_type = equalizator_type
         self.snr_db = snr_db
         self.noise_scheme = noise_scheme
@@ -123,6 +126,7 @@ class Simulation:
                 constellation_scheme=simulation_settings.constellation_type,
                 modulator_type=simulation_settings.modulation_type,
                 prefix_scheme=simulation_settings.prefix_type,
+                prefix_length_ratio=simulation_settings.prefix_length_ratio,
                 equalizator_type=simulation_settings.equalization_method,
                 snr_db=snr,
                 noise_scheme=simulation_settings.noise_type,
@@ -160,10 +164,14 @@ class Simulation:
         channel: ChannelModel = ChannelModel(
             impulse_response=channel_impulse_response, snr_db=self.snr_db, noise_model=noise_model
         )
+        prefix_length = int(self.prefix_length_ratio * channel.order)
+        if self.prefix_scheme == PrefixType.NONE:
+            prefix_length = 0
+        print(f"Using prefix length: {prefix_length}")
 
         # Prefix Scheme
         prefix_scheme = self.PREFIX_SCHEME_MAPPERS.get(self.prefix_scheme, NoPrefixScheme)(
-            prefix_length=channel.order if self.prefix_scheme != PrefixType.NONE else 0
+            prefix_length=prefix_length
         )
         # Equalizator
         equalizator = self.EQUALIZATOR_SCHEME_MAPPERS.get(self.equalizator_type, NoEqualizator)(
@@ -373,4 +381,5 @@ class Simulation:
 
         print("Simulation completed.")
 
+        return results
         return results
