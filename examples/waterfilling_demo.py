@@ -24,7 +24,7 @@ def demonstrate_waterfilling():
     print("=" * 70)
 
     # Channel parameters
-    num_subcarriers = 16
+    num_subcarriers = 64
     total_power = 1.0
     snr_db = 20.0
     noise_power = 10 ** (-snr_db / 10)

@@ -111,7 +111,6 @@ class SimulationSettings(BaseSettings):
     @field_validator("prefix_length_ratio")
     @classmethod
     def validate_prefix_length_ratio(cls, v):
-        if not 0.0 <= v <= 1.0:
+        if not 0.0 <= v <= 2.0:
             raise ValueError("prefix_length_ratio must be between 0 and 1 (inclusive).")
-        return v
         return v

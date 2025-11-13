@@ -4,9 +4,9 @@ This module provides a clean, modular interface for running OFDM simulations
 with proper separation of concerns and comprehensive result management.
 """
 
-import os
+import shutil
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Union
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -24,6 +24,7 @@ class ResultsManager:
         results_dir: str = "results",
         images_dir: str = "images",
         channel_name: str = "default",
+        doc_figures_dir: Union[str, Path, None] = "docs/figures",
     ):
         """Initialize results manager.
 
@@ -31,16 +32,39 @@ class ResultsManager:
             results_dir: Directory for storing CSV results
             images_dir: Base directory for storing plot images
             channel_name: Name of the channel (used to create subdirectory)
+            doc_figures_dir: Directory for mirroring plots for documentation
         """
         self.results_dir = Path(results_dir)
         self.channel_name = channel_name
         # Create channel-specific subdirectory for images
         self.images_dir = Path(images_dir) / channel_name
         self.csv_path = self.results_dir / "ber_results.csv"
+        self.doc_figures_dir: Optional[Path] = Path(doc_figures_dir) if doc_figures_dir else None
+        self.doc_channel_dir: Optional[Path] = None
 
         # Create directories if they don't exist
         self.results_dir.mkdir(parents=True, exist_ok=True)
         self.images_dir.mkdir(parents=True, exist_ok=True)
+        if self.doc_figures_dir:
+            self.doc_figures_dir.mkdir(parents=True, exist_ok=True)
+            self.doc_channel_dir = self.doc_figures_dir / self.channel_name
+            self.doc_channel_dir.mkdir(parents=True, exist_ok=True)
+
+    def _mirror_to_docs(self, source_path: Path) -> Optional[Path]:
+        """Copy a generated plot to the documentation figures directory."""
+
+        if not self.doc_channel_dir or not source_path.exists():
+            return None
+
+        try:
+            relative_path = source_path.relative_to(self.images_dir)
+        except ValueError:
+            relative_path = source_path.name
+
+        destination = self.doc_channel_dir / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, destination)
+        return destination
 
     def update_ber_csv(self, simulation_name: str, snr_db: float, bit_error_rate: float) -> None:
         """Update or append BER results to CSV file.
@@ -116,6 +140,7 @@ class ResultsManager:
 
         filepath = self.images_dir / filename
         image.save(filepath)
+        self._mirror_to_docs(filepath)
         return filepath
 
     def plot_ber_vs_snr(self, results: List[Dict[str, Any]]) -> Path:
@@ -164,6 +189,7 @@ class ResultsManager:
         filepath = self.images_dir / output_filename
         plt.savefig(filepath, dpi=150)
         plt.close()
+        self._mirror_to_docs(filepath)
 
         return filepath
 
@@ -265,6 +291,11 @@ class SimulationRunner:
                 image.close()
 
         print(f"  ✓ Saved {len(saved_images)} constellation plot(s)")
+        if saved_images and self.results_manager.doc_channel_dir:
+            print(
+                f"  -> Mirrored constellation plot(s) to "
+                f"{self.results_manager.doc_channel_dir}"
+            )
 
         # Save BER data to CSV
         simulation_name = (
@@ -284,6 +315,11 @@ class SimulationRunner:
         # Generate BER vs SNR plot
         plot_path = self.results_manager.plot_ber_vs_snr(results)
         print(f"  ✓ Generated BER vs SNR plot: {plot_path}")
+        if self.results_manager.doc_channel_dir:
+            print(
+                f"  -> Mirrored BER plot to "
+                f"{self.results_manager.doc_channel_dir / plot_path.name}"
+            )
 
         # Print summary statistics
         print(f"\n{'=' * 80}")

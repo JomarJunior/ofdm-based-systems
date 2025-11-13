@@ -4,6 +4,9 @@ This script creates a clear visualization of the waterfilling power allocation
 algorithm showing the "water container" analogy with channel floor and water level.
 """
 
+import shutil
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -12,6 +15,11 @@ from ofdm_based_systems.power_allocation.models import (
     WaterfillingPowerAllocation,
 )
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CHANNEL_PATH = PROJECT_ROOT / "config" / "channel_models" / "Lin-Phoong_P2.npy"
+IMAGES_DIR = PROJECT_ROOT / "images" / "Lin-Phoong_P2" / "CP-OFDM-Waterfilling-Study"
+DOCS_FIGURES_DIR = PROJECT_ROOT / "docs" / "figures"
+
 
 def plot_waterfilling_diagram():
     """Generate waterfilling diagram with channel floor and power allocation."""
@@ -19,12 +27,11 @@ def plot_waterfilling_diagram():
     # Configuration from simulation settings
     num_subcarriers = 64
     total_power = 1.0
-    snr_db = 20.0
-    noise_power = 10 ** (-snr_db / 10)
+    snr_db = 25.0
+    noise_power = total_power / (10 ** (snr_db / 10))
 
-    # Create frequency-selective channel (multipath)
-    # Simulate realistic multipath: h(t) = δ(t) + 0.7·δ(t-1) + 0.4·δ(t-2) + 0.2·δ(t-3)
-    channel_impulse = np.array([1.0, 0.7, 0.4, 0.2], dtype=np.complex128)
+    # Load the Lin-Phoong P2 impulse response used throughout the simulations
+    channel_impulse = np.load(CHANNEL_PATH).astype(np.complex128)
     channel_response = np.fft.fft(channel_impulse, n=num_subcarriers)
     channel_gains = np.abs(channel_response) ** 2
 
@@ -36,7 +43,7 @@ def plot_waterfilling_diagram():
     print(f"  - Total power budget: {total_power}")
     print(f"  - SNR: {snr_db} dB")
     print(f"  - Noise power: {noise_power:.6f}")
-    print(f"  - Channel: Multipath (4 taps)")
+    print(f"  - Channel: Lin-Phoong P2 ({channel_impulse.size} taps)")
 
     # Calculate power allocations
     uniform_allocator = UniformPowerAllocation(
@@ -64,6 +71,9 @@ def plot_waterfilling_diagram():
     print(f"  - Subcarriers with zero power: {np.sum(waterfilling_power < 1e-10)}")
 
     # Create the visualization
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    DOCS_FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+
     create_waterfilling_diagram(
         channel_gains,
         floor,
@@ -72,11 +82,9 @@ def plot_waterfilling_diagram():
         mean_water_level,
         num_subcarriers,
         noise_power,
+        IMAGES_DIR,
+        DOCS_FIGURES_DIR,
     )
-
-    print(f"\n{'=' * 80}")
-    print("Visualization saved to 'waterfilling_diagram.png'")
-    print("=" * 80)
 
 
 def create_waterfilling_diagram(
@@ -87,83 +95,79 @@ def create_waterfilling_diagram(
     water_level,
     num_subcarriers,
     noise_power,
+    output_dir: Path,
+    doc_copy_dir: Path,
 ):
-    """Create detailed waterfilling diagram visualization.
+    """Create detailed waterfilling diagram visualization."""
 
-    Args:
-        channel_gains: Channel power gains |H[k]|²
-        floor: Inverse SNR (N₀/|H[k]|²) - the container floor
-        waterfilling_power: Waterfilling power allocation
-        uniform_power: Uniform power allocation for comparison
-        water_level: Constant water level (μ)
-        num_subcarriers: Number of subcarriers
-        noise_power: Noise power
-    """
+    finite_floor = floor[np.isfinite(floor)]
+    if finite_floor.size > 0:
+        floor_clip = np.quantile(finite_floor, 0.9)
+        if floor_clip <= 0:
+            floor_clip = np.max(finite_floor)
+    else:
+        floor_clip = 0.0
 
-    # Create figure with multiple subplots
+    floor_plot = np.array(floor, copy=True)
+    if floor_clip > 0:
+        floor_plot = np.clip(floor_plot, 0.0, floor_clip)
+    clipped_mask = (
+        (np.isfinite(floor) & (floor > floor_clip))
+        if floor_clip > 0
+        else np.zeros_like(floor, dtype=bool)
+    )
+
+    inverse_floor_plot = floor_plot / noise_power if noise_power > 0 else floor_plot
+
     fig = plt.figure(figsize=(16, 12))
     gs = fig.add_gridspec(3, 2, hspace=0.3, wspace=0.3)
-
     subcarriers = np.arange(num_subcarriers)
 
-    # Main waterfilling diagram (large, top subplot)
     ax_main = fig.add_subplot(gs[0, :])
-
-    # Plot the floor (inverse channel quality)
-    bars_floor = ax_main.bar(
+    ax_main.bar(
         subcarriers,
-        floor,
+        floor_plot,
         width=0.8,
-        color="#8B4513",  # Saddle brown
+        color="#8B4513",
         edgecolor="black",
         linewidth=0.5,
         alpha=0.8,
         label="Floor: N₀/|H[k]|²",
     )
-
-    # Plot the water (power allocation) on top of floor
-    bars_water = ax_main.bar(
+    ax_main.bar(
         subcarriers,
         waterfilling_power,
-        bottom=floor,
+        bottom=floor_plot,
         width=0.8,
-        color="#4169E1",  # Royal blue (water color)
+        color="#4169E1",
         edgecolor="navy",
         linewidth=0.5,
         alpha=0.7,
         label="Water: Allocated Power P[k]",
     )
-
-    # Draw water level line
     ax_main.axhline(
         y=water_level,
-        color="#00BFFF",  # Deep sky blue
+        color="#00BFFF",
         linestyle="--",
         linewidth=3,
         label=f"Water Level μ = {water_level:.4f}",
         zorder=10,
     )
 
-    # Annotate some specific subcarriers
-    # Find best and worst channels
     best_idx = np.argmax(channel_gains)
     worst_idx = np.argmin(channel_gains)
-
-    # Annotate best channel
     ax_main.annotate(
         f"Best Channel\nP[{best_idx}]={waterfilling_power[best_idx]:.4f}",
-        xy=(best_idx, floor[best_idx] + waterfilling_power[best_idx] / 2),
+        xy=(best_idx, floor_plot[best_idx] + waterfilling_power[best_idx] / 2),
         xytext=(best_idx + 5, water_level + 0.005),
         fontsize=9,
         bbox=dict(boxstyle="round,pad=0.5", facecolor="lightgreen", alpha=0.7),
         arrowprops=dict(arrowstyle="->", color="green", lw=2),
     )
-
-    # Annotate worst channel
     ax_main.annotate(
         f"Worst Channel\nP[{worst_idx}]={waterfilling_power[worst_idx]:.4f}",
-        xy=(worst_idx, floor[worst_idx] + waterfilling_power[worst_idx] / 2),
-        xytext=(worst_idx - 10, water_level + 0.005),
+        xy=(worst_idx, floor_plot[worst_idx] + waterfilling_power[worst_idx] / 2),
+        xytext=(max(worst_idx - 8, 0), water_level + 0.005),
         fontsize=9,
         bbox=dict(boxstyle="round,pad=0.5", facecolor="lightcoral", alpha=0.7),
         arrowprops=dict(arrowstyle="->", color="red", lw=2),
@@ -178,11 +182,28 @@ def create_waterfilling_diagram(
         fontweight="bold",
         pad=20,
     )
-    ax_main.legend(loc="upper right", fontsize=11, framealpha=0.9)
     ax_main.grid(True, alpha=0.3, linestyle=":", linewidth=0.5)
     ax_main.set_xlim(-1, num_subcarriers)
 
-    # Add text box with explanation
+    if np.any(clipped_mask):
+        ax_main.scatter(
+            subcarriers[clipped_mask],
+            np.full(np.sum(clipped_mask), floor_clip),
+            marker="v",
+            color="red",
+            s=40,
+            zorder=11,
+            label=f"Clipped floor (>{floor_clip:.3f})",
+        )
+        ax_main.text(
+            0.02,
+            0.10,
+            f"Floors above {floor_clip:.3f} clipped for visibility",
+            transform=ax_main.transAxes,
+            fontsize=9,
+            bbox=dict(boxstyle="round", facecolor="mistyrose", alpha=0.7),
+        )
+
     textstr = (
         "Waterfilling Principle:\n"
         "• Water seeks constant level\n"
@@ -190,7 +211,6 @@ def create_waterfilling_diagram(
         "• Shallow areas (bad channels) hold less water\n"
         f"• Total water volume = {np.sum(waterfilling_power):.4f}"
     )
-    props = dict(boxstyle="round", facecolor="wheat", alpha=0.8)
     ax_main.text(
         0.02,
         0.97,
@@ -198,16 +218,17 @@ def create_waterfilling_diagram(
         transform=ax_main.transAxes,
         fontsize=10,
         verticalalignment="top",
-        bbox=props,
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8),
     )
 
-    # Subplot 1: Channel Gains (inverted to show floor concept)
+    ax_main.legend(loc="upper right", fontsize=11, framealpha=0.9)
+
     ax1 = fig.add_subplot(gs[1, 0])
     ax1.bar(
         subcarriers,
-        1.0 / channel_gains,  # Inverted to show as "depth"
+        inverse_floor_plot,
         width=0.8,
-        color="#CD853F",  # Peru (earth color)
+        color="#CD853F",
         edgecolor="black",
         linewidth=0.5,
         alpha=0.8,
@@ -215,11 +236,12 @@ def create_waterfilling_diagram(
     ax1.set_xlabel("Subcarrier Index", fontsize=10)
     ax1.set_ylabel("Inverse Channel Gain (1/|H[k]|²)", fontsize=10)
     ax1.set_title(
-        "Channel Quality (Inverted)\nHigher = Worse Channel", fontsize=11, fontweight="bold"
+        "Channel Quality (Inverted)\nHigher = Worse Channel",
+        fontsize=11,
+        fontweight="bold",
     )
     ax1.grid(True, alpha=0.3)
 
-    # Subplot 2: Power Allocation Comparison
     ax2 = fig.add_subplot(gs[1, 1])
     width = 0.4
     ax2.bar(
@@ -248,7 +270,6 @@ def create_waterfilling_diagram(
     ax2.legend(fontsize=10)
     ax2.grid(True, alpha=0.3)
 
-    # Subplot 3: Channel Gains (normal view)
     ax3 = fig.add_subplot(gs[2, 0])
     ax3.bar(
         subcarriers,
@@ -262,11 +283,12 @@ def create_waterfilling_diagram(
     ax3.set_xlabel("Subcarrier Index", fontsize=10)
     ax3.set_ylabel("Channel Power Gain |H[k]|²", fontsize=10)
     ax3.set_title(
-        "Channel Frequency Response\nHigher = Better Channel", fontsize=11, fontweight="bold"
+        "Channel Frequency Response\nHigher = Better Channel",
+        fontsize=11,
+        fontweight="bold",
     )
     ax3.grid(True, alpha=0.3)
 
-    # Subplot 4: Power vs Channel Gain Scatter
     ax4 = fig.add_subplot(gs[2, 1])
     ax4.scatter(
         channel_gains,
@@ -278,27 +300,25 @@ def create_waterfilling_diagram(
         linewidth=0.5,
         alpha=0.7,
     )
-    # Fit and plot trend line
     z = np.polyfit(channel_gains, waterfilling_power, 1)
     p = np.poly1d(z)
     x_trend = np.linspace(np.min(channel_gains), np.max(channel_gains), 100)
-    ax4.plot(x_trend, p(x_trend), "r--", linewidth=2, label=f"Trend: P ∝ |H|²")
-
+    ax4.plot(x_trend, p(x_trend), "r--", linewidth=2, label="Trend: P ∝ |H|²")
     ax4.set_xlabel("Channel Gain |H[k]|²", fontsize=10)
     ax4.set_ylabel("Allocated Power P[k]", fontsize=10)
     ax4.set_title(
-        "Power vs Channel Quality\nShows Positive Correlation", fontsize=11, fontweight="bold"
+        "Power vs Channel Quality\nShows Positive Correlation",
+        fontsize=11,
+        fontweight="bold",
     )
     ax4.legend(fontsize=10)
     ax4.grid(True, alpha=0.3)
 
-    # Add colorbar for scatter plot
     sm = plt.cm.ScalarMappable(cmap="viridis", norm=plt.Normalize(vmin=0, vmax=num_subcarriers - 1))
     sm.set_array([])
     cbar = plt.colorbar(sm, ax=ax4)
     cbar.set_label("Subcarrier Index", fontsize=9)
 
-    # Overall title
     fig.suptitle(
         f"Waterfilling Power Allocation Visualization\n"
         f"{num_subcarriers} Subcarriers | Total Power: {np.sum(waterfilling_power):.4f} | SNR: {-10*np.log10(noise_power):.1f} dB",
@@ -307,20 +327,40 @@ def create_waterfilling_diagram(
         y=0.98,
     )
 
-    # Save figure
-    plt.savefig("waterfilling_diagram.png", dpi=300, bbox_inches="tight")
-    print("\n✓ High-resolution diagram saved to 'waterfilling_diagram.png'")
+    detailed_path = output_dir / "CP-OFDM-waterfilling-diagram-detailed.png"
+    fig.savefig(detailed_path, dpi=300, bbox_inches="tight")
+    if doc_copy_dir:
+        shutil.copy2(detailed_path, doc_copy_dir / detailed_path.name)
+    print(f"\n✓ High-resolution diagram saved to '{detailed_path.relative_to(PROJECT_ROOT)}'")
 
-    # Also create a simplified version for presentations
-    create_simple_diagram(subcarriers, floor, waterfilling_power, water_level, channel_gains)
+    create_simple_diagram(
+        subcarriers,
+        floor_plot,
+        waterfilling_power,
+        water_level,
+        channel_gains,
+        floor_clip,
+        clipped_mask,
+        output_dir,
+        doc_copy_dir,
+    )
 
 
-def create_simple_diagram(subcarriers, floor, waterfilling_power, water_level, channel_gains):
+def create_simple_diagram(
+    subcarriers,
+    floor,
+    waterfilling_power,
+    water_level,
+    channel_gains,
+    floor_clip,
+    clipped_mask,
+    output_dir: Path,
+    doc_copy_dir: Path,
+):
     """Create a simplified, clean diagram suitable for presentations."""
 
     fig, ax = plt.subplots(figsize=(12, 7))
 
-    # Plot floor
     ax.bar(
         subcarriers,
         floor,
@@ -331,8 +371,6 @@ def create_simple_diagram(subcarriers, floor, waterfilling_power, water_level, c
         alpha=0.9,
         label="Channel Floor: N₀/|H[k]|²",
     )
-
-    # Plot water
     ax.bar(
         subcarriers,
         waterfilling_power,
@@ -344,8 +382,6 @@ def create_simple_diagram(subcarriers, floor, waterfilling_power, water_level, c
         alpha=0.8,
         label="Allocated Power: P[k]",
     )
-
-    # Water level line
     ax.axhline(
         y=water_level,
         color="cyan",
@@ -362,13 +398,10 @@ def create_simple_diagram(subcarriers, floor, waterfilling_power, water_level, c
         fontweight="bold",
         pad=20,
     )
-    ax.legend(loc="upper right", fontsize=12, framealpha=0.95)
     ax.grid(True, alpha=0.3, linestyle=":", linewidth=1)
 
-    # Annotate extremes
     best_idx = np.argmax(channel_gains)
     worst_idx = np.argmin(channel_gains)
-
     ax.annotate(
         "Best Channel",
         xy=(best_idx, water_level),
@@ -378,10 +411,9 @@ def create_simple_diagram(subcarriers, floor, waterfilling_power, water_level, c
         bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgreen", alpha=0.8),
         arrowprops=dict(arrowstyle="->", color="green", lw=2),
     )
-
     ax.annotate(
         "Worst Channel",
-        xy=(worst_idx, water_level),
+        xy=(worst_idx, floor[worst_idx] + waterfilling_power[worst_idx]),
         xytext=(worst_idx, water_level + 0.01),
         fontsize=11,
         ha="center",
@@ -389,11 +421,41 @@ def create_simple_diagram(subcarriers, floor, waterfilling_power, water_level, c
         arrowprops=dict(arrowstyle="->", color="red", lw=2),
     )
 
+    if np.any(clipped_mask):
+        ax.scatter(
+            subcarriers[clipped_mask],
+            np.full(np.sum(clipped_mask), floor_clip),
+            marker="v",
+            color="red",
+            s=50,
+            zorder=11,
+            label="Clipped floor",
+        )
+        ax.text(
+            0.02,
+            0.10,
+            f"Floors above {floor_clip:.3f} clipped",
+            transform=ax.transAxes,
+            fontsize=11,
+            bbox=dict(boxstyle="round", facecolor="mistyrose", alpha=0.8),
+        )
+
+    ax.legend(loc="upper right", fontsize=12, framealpha=0.95)
+
     plt.tight_layout()
-    plt.savefig("waterfilling_diagram_simple.png", dpi=300, bbox_inches="tight")
-    print("✓ Simple diagram saved to 'waterfilling_diagram_simple.png'")
+    simple_path = output_dir / "CP-OFDM-waterfilling-diagram.png"
+    fig.savefig(simple_path, dpi=300, bbox_inches="tight")
+    if doc_copy_dir:
+        shutil.copy2(simple_path, doc_copy_dir / simple_path.name)
+    print(f"✓ Simple diagram saved to '{simple_path.relative_to(PROJECT_ROOT)}'")
     plt.close()
 
 
 if __name__ == "__main__":
     plot_waterfilling_diagram()
+    print(f"\n{'=' * 80}")
+    print(
+        "Latest diagrams mirrored to 'images/Lin-Phoong_P2/CP-OFDM-Waterfilling-Study/' "
+        "and 'docs/figures/'."
+    )
+    print(f"{'=' * 80}")

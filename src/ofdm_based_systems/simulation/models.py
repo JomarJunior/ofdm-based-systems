@@ -407,6 +407,20 @@ class Simulation:
         demodulated_serial_data = serial_to_parallel_converter.to_serial(demodulated_data)
         print(f"Demodulated Serial Data Shape: {demodulated_serial_data.shape}")
 
+        # Normalize symbols to constellation scale
+        print("=" * 50)
+        print("Normalizing symbols for constellation demapping...")
+        print("=" * 50)
+        # Calculate current average power of received symbols
+        current_avg_power = np.mean(np.abs(demodulated_serial_data) ** 2)
+        # Constellation has unit average power, so normalize to unit power
+        if current_avg_power > 1e-10:  # Avoid division by zero
+            normalization_factor = np.sqrt(current_avg_power)
+            demodulated_serial_data = demodulated_serial_data / normalization_factor
+            self._log(f"Normalized symbols: avg power {current_avg_power:.6f} -> 1.0")
+        else:
+            self._log("Warning: Received signal has near-zero power, skipping normalization")
+
         print("=" * 50)
         print("Constellation Demapping...")
         print("=" * 50)

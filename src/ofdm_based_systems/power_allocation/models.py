@@ -259,6 +259,39 @@ def calculate_capacity(
     return capacity
 
 
+def calculate_capacity_per_subcarrier(
+    power_allocation: NDArray[np.float64],
+    channel_gains: NDArray[np.float64],
+    noise_power: float,
+) -> NDArray[np.float64]:
+    """Calculate Shannon capacity per subcarrier for given power allocation.
+
+    Computes the achievable data rate for each subcarrier using the
+    Shannon-Hartley theorem:
+        C[k] = log₂(1 + P[k]·|H[k]|²/N₀)
+    Args:
+        power_allocation: Power allocated to each subcarrier
+        channel_gains: Channel power gains |H[k]|²
+        noise_power: Noise power N₀
+    Returns:
+        Capacity per subcarrier in bits per channel use (bps/Hz)
+    Example:
+        >>> power = np.array([0.5, 0.3, 0.2])
+        >>> gains = np.array([1.0, 0.8, 0.6])
+        >>> noise = 0.1
+        >>> capacity_per_subcarrier = calculate_capacity_per_subcarrier(power, gains, noise)
+        >>> print(f"Capacity per subcarrier: {capacity_per_subcarrier}")
+    """
+    # Calculate SNR for each subcarrier
+    snr = power_allocation * channel_gains / noise_power
+
+    # Shannon capacity formula with small epsilon to avoid log(1)
+    # log₂(1 + SNR) gives capacity in bits per channel use
+    capacity_per_subcarrier = np.log2(1 + snr + 1e-12)
+
+    return capacity_per_subcarrier
+
+
 def compare_allocations(
     uniform: NDArray[np.float64],
     waterfilling: NDArray[np.float64],

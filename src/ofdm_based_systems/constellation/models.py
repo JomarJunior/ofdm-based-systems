@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from functools import cached_property
 from io import BytesIO
-from typing import BinaryIO, Dict, Tuple, Type
+from typing import BinaryIO, Dict, List, Tuple, Type, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -211,21 +211,24 @@ class QAMConstellationMapper(IConstellationMapper):
             (float(point.real), float(point.imag)): i for i, point in enumerate(constellation)
         }
 
-    def encode(self, bits: BinaryIO) -> NDArray[np.complex128]:
+    def encode(self, bits: Union[BinaryIO, List[int]]) -> NDArray[np.complex128]:
         """Encodes a stream of bits into QAM symbols."""
         # Read the bytes from the binary stream
-        bytes_data = bits.read()
+        bits_list: List[int] = []
+        if isinstance(bits, list):
+            bits_list = bits
+        else:
+            bytes_data = bits.read()
+            # Extract individual bits from bytes
+            bits_list = []
+            for byte in bytes_data:
+                # Extract 8 bits from each byte, from MSB to LSB
+                for i in range(7, -1, -1):
+                    bits_list.append((byte >> i) & 1)
 
-        # Extract individual bits from bytes
-        bits_list = []
-        for byte in bytes_data:
-            # Extract 8 bits from each byte, from MSB to LSB
-            for i in range(7, -1, -1):
-                bits_list.append((byte >> i) & 1)
-
-        if len(bits_list) % self.bits_per_symbol != 0:
-            # Pad with zeros if bits are not a multiple of bits_per_symbol
-            bits_list += [0] * (self.bits_per_symbol - len(bits_list) % self.bits_per_symbol)
+            if len(bits_list) % self.bits_per_symbol != 0:
+                # Pad with zeros if bits are not a multiple of bits_per_symbol
+                bits_list += [0] * (self.bits_per_symbol - len(bits_list) % self.bits_per_symbol)
 
         # Reshape bits into groups corresponding to symbols
         bit_chunks = np.array(bits_list).reshape(-1, self.bits_per_symbol)
@@ -344,21 +347,24 @@ class PSKConstellationMapper(IConstellationMapper):
             (float(point.real), float(point.imag)): i for i, point in enumerate(constellation)
         }
 
-    def encode(self, bits: BinaryIO) -> NDArray[np.complex128]:
+    def encode(self, bits: Union[BinaryIO, List[int]]) -> NDArray[np.complex128]:
         """Encodes a stream of bits into PSK symbols."""
-        # Read the bytes from the binary stream
-        bytes_data = bits.read()
+        if isinstance(bits, list):
+            bits_list: List[int] = bits
+        else:
+            # Read the bytes from the binary stream
+            bytes_data = bits.read()
 
-        # Extract individual bits from bytes
-        bits_list = []
-        for byte in bytes_data:
-            # Extract 8 bits from each byte, from MSB to LSB
-            for i in range(7, -1, -1):
-                bits_list.append((byte >> i) & 1)
+            # Extract individual bits from bytes
+            bits_list = []
+            for byte in bytes_data:
+                # Extract 8 bits from each byte, from MSB to LSB
+                for i in range(7, -1, -1):
+                    bits_list.append((byte >> i) & 1)
 
-        if len(bits_list) % self.bits_per_symbol != 0:
-            # Pad with zeros if bits are not a multiple of bits_per_symbol
-            bits_list += [0] * (self.bits_per_symbol - len(bits_list) % self.bits_per_symbol)
+            if len(bits_list) % self.bits_per_symbol != 0:
+                # Pad with zeros if bits are not a multiple of bits_per_symbol
+                bits_list += [0] * (self.bits_per_symbol - len(bits_list) % self.bits_per_symbol)
 
         # Reshape bits into groups corresponding to symbols
         bit_chunks = np.array(bits_list).reshape(-1, self.bits_per_symbol)
