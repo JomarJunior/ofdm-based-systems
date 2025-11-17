@@ -5,6 +5,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 
 from ofdm_based_systems.configuration.enums import (
+    AdaptiveModulationMode,
     ChannelType,
     ConstellationType,
     EqualizationMethod,
@@ -78,6 +79,22 @@ class SimulationSettings(BaseSettings):
         PowerAllocationType.UNIFORM,
         description="Type of power allocation strategy (e.g., UNIFORM or WATERFILLING)",
     )
+    adaptive_modulation_mode: AdaptiveModulationMode = Field(
+        AdaptiveModulationMode.FIXED,
+        description="Adaptive modulation mode (FIXED or CAPACITY_BASED)",
+    )
+    min_constellation_order: int = Field(
+        4,
+        description="Minimum constellation order for adaptive modulation (must be power of 2)",
+    )
+    max_constellation_order: int = Field(
+        256,
+        description="Maximum constellation order for adaptive modulation (must be power of 2)",
+    )
+    capacity_scaling_factor: float = Field(
+        1.0,
+        description="Scaling factor for capacity-based constellation order selection",
+    )
 
     def __str__(self):
         return (
@@ -113,4 +130,20 @@ class SimulationSettings(BaseSettings):
     def validate_prefix_length_ratio(cls, v):
         if not 0.0 <= v <= 2.0:
             raise ValueError("prefix_length_ratio must be between 0 and 1 (inclusive).")
+        return v
+
+    @field_validator("min_constellation_order", "max_constellation_order")
+    @classmethod
+    def validate_constellation_order(cls, v):
+        if v < 2 or v > 4096:
+            raise ValueError("Constellation order must be between 2 and 4096.")
+        if not (v & (v - 1) == 0):  # Check if power of 2
+            raise ValueError(f"Constellation order must be a power of 2, got {v}.")
+        return v
+
+    @field_validator("capacity_scaling_factor")
+    @classmethod
+    def validate_capacity_scaling_factor(cls, v):
+        if v <= 0:
+            raise ValueError("capacity_scaling_factor must be positive.")
         return v

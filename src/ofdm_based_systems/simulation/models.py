@@ -7,9 +7,14 @@ import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
 
-from ofdm_based_systems.bits_generation.models import IGenerator, RandomBitsGenerator
+from ofdm_based_systems.bits_generation.models import (
+    AdaptiveBitsGenerator,
+    IGenerator,
+    RandomBitsGenerator,
+)
 from ofdm_based_systems.channel.models import ChannelModel
 from ofdm_based_systems.configuration.enums import (
+    AdaptiveModulationMode,
     ConstellationType,
     EqualizationMethod,
     ModulationType,
@@ -18,6 +23,10 @@ from ofdm_based_systems.configuration.enums import (
     PrefixType,
 )
 from ofdm_based_systems.configuration.models import SimulationSettings
+from ofdm_based_systems.constellation.adaptive import (
+    AdaptiveConstellationMapper,
+    calculate_constellation_orders,
+)
 from ofdm_based_systems.constellation.models import (
     IConstellationMapper,
     PSKConstellationMapper,
@@ -37,6 +46,7 @@ from ofdm_based_systems.noise.models import AWGNoiseModel, NoNoiseModel
 from ofdm_based_systems.power_allocation.models import (
     UniformPowerAllocation,
     WaterfillingPowerAllocation,
+    calculate_capacity_per_subcarrier,
 )
 from ofdm_based_systems.prefix.models import (
     CyclicPrefixScheme,
@@ -106,6 +116,10 @@ class Simulation:
         snr_db: float = 20.0,
         noise_scheme: NoiseType = NoiseType.AWGN,
         power_allocation_type: PowerAllocationType = PowerAllocationType.UNIFORM,
+        adaptive_modulation_mode: AdaptiveModulationMode = AdaptiveModulationMode.FIXED,
+        min_constellation_order: int = 4,
+        max_constellation_order: int = 256,
+        capacity_scaling_factor: float = 1.0,
         channel_impulse_response: Optional[NDArray[np.complex128]] = None,
         verbose: bool = True,
     ):
@@ -126,6 +140,10 @@ class Simulation:
         self.snr_db = snr_db
         self.noise_scheme = noise_scheme
         self.power_allocation_type = power_allocation_type
+        self.adaptive_modulation_mode = adaptive_modulation_mode
+        self.min_constellation_order = min_constellation_order
+        self.max_constellation_order = max_constellation_order
+        self.capacity_scaling_factor = capacity_scaling_factor
         self.channel_impulse_response = channel_impulse_response
         self.verbose = verbose
 
@@ -184,6 +202,10 @@ class Simulation:
                 snr_db=snr,
                 noise_scheme=simulation_settings.noise_type,
                 power_allocation_type=simulation_settings.power_allocation_type,
+                adaptive_modulation_mode=simulation_settings.adaptive_modulation_mode,
+                min_constellation_order=simulation_settings.min_constellation_order,
+                max_constellation_order=simulation_settings.max_constellation_order,
+                capacity_scaling_factor=simulation_settings.capacity_scaling_factor,
                 channel_impulse_response=channel_impulse_response,
             )
             simulations.append(simulation)
@@ -191,15 +213,12 @@ class Simulation:
 
     def run(self) -> Dict[str, Any]:
         results = {}
+        import time
+
         print("=" * 50)
         print("Starting OFDM-based System Simulation")
         print("=" * 50)
-        # Bits Generation
-        bits_generator: IGenerator = RandomBitsGenerator()
-        # Constellation Mapping
-        constellation_mapper: IConstellationMapper = self.CONSTELLATION_SCHEME_MAPPERS.get(
-            self.constellation_scheme, QAMConstellationMapper
-        )(order=self.constellation_order)
+
         # Serial to Parallel Conversion
         serial_to_parallel_converter: SerialToParallelConverter = SerialToParallelConverter()
 
@@ -234,6 +253,8 @@ class Simulation:
             prefix_length = 0
         print(f"Using prefix length: {prefix_length}")
 
+        print(f"Signal to noise ratio: {self.snr_db} dB")
+
         # Prefix Scheme
         prefix_scheme = self.PREFIX_SCHEME_MAPPERS.get(self.prefix_scheme, NoPrefixScheme)(
             prefix_length=prefix_length
@@ -252,6 +273,118 @@ class Simulation:
             prefix_scheme=prefix_scheme,
             equalizator=equalizator,
         )
+
+        # Pre-calculate channel parameters for power allocation and adaptive modulation
+        channel_frequency_response = np.fft.fft(channel_impulse_response, self.num_subcarriers)
+        channel_gains = np.abs(channel_frequency_response) ** 2
+        noise_power = 10 ** (-self.snr_db / 10)
+        print(f"Channel gains (|H|^2): {channel_gains}")
+        print(f"Noise power: {noise_power:.6f}")
+
+        # Determine constellation mapper and bit requirements based on adaptive mode
+        water_level: Optional[float] = None
+        constellation_orders: NDArray[np.int64]
+        power_allocation: NDArray[np.float64] = np.array([])  # Will be assigned in either branch
+
+        if self.adaptive_modulation_mode == AdaptiveModulationMode.CAPACITY_BASED:
+            print("=" * 50)
+            print("Configuring Adaptive Modulation (CAPACITY_BASED)")
+            print("=" * 50)
+
+            # Calculate power allocation first (needed for capacity calculation)
+            if self.power_allocation_type == PowerAllocationType.WATERFILLING:
+                power_allocator = WaterfillingPowerAllocation(
+                    total_power=1.0,
+                    channel_gains=channel_gains,
+                    noise_power=noise_power,
+                )
+            else:
+                power_allocator = UniformPowerAllocation(
+                    total_power=1.0,
+                    num_subcarriers=self.num_subcarriers,
+                )
+
+            power_allocation = power_allocator.allocate()
+
+            # Calculate water level for waterfilling
+            if self.power_allocation_type == PowerAllocationType.WATERFILLING:
+                floor = noise_power / channel_gains
+                water_level_array = power_allocation + floor
+                water_level = float(np.mean(water_level_array[power_allocation > 1e-10]))
+
+            # Calculate capacity per subcarrier
+            capacity = calculate_capacity_per_subcarrier(
+                power_allocation, channel_gains, noise_power
+            )
+
+            # Determine constellation orders based on capacity
+            base_mapper_class = self.CONSTELLATION_SCHEME_MAPPERS.get(
+                self.constellation_scheme, QAMConstellationMapper
+            )
+            constellation_orders = calculate_constellation_orders(
+                capacity=capacity,
+                min_order=self.min_constellation_order,
+                max_order=self.max_constellation_order,
+                scaling_factor=self.capacity_scaling_factor,
+                base_mapper_class=base_mapper_class,
+            )
+
+            print(f"  Capacity range: {capacity.min():.2f} - {capacity.max():.2f} bits/symbol")
+            print(
+                f"  Constellation orders: min={constellation_orders[constellation_orders>0].min() if np.any(constellation_orders>0) else 0}, "
+                f"max={constellation_orders.max()}, "
+                f"mean={constellation_orders[constellation_orders>0].mean() if np.any(constellation_orders>0) else 0:.1f}"
+            )
+            print(
+                f"  Active subcarriers: {np.sum(constellation_orders > 0)}/{self.num_subcarriers}"
+            )
+            if water_level is not None:
+                print(f"  Water level (μ): {water_level:.6f}")
+
+            # Create adaptive constellation mapper
+            constellation_mapper: IConstellationMapper = AdaptiveConstellationMapper(
+                constellation_orders=constellation_orders,
+                base_mapper_class=base_mapper_class,
+                num_subcarriers=self.num_subcarriers,
+            )
+
+            # Calculate bit requirements
+            bits_per_subcarrier = constellation_mapper.get_bits_per_subcarrier()
+
+            # Determine number of OFDM symbols
+            if self.num_symbols is not None:
+                num_ofdm_symbols = self.num_symbols
+            elif self.num_bits is not None:
+                bits_per_ofdm_symbol = int(np.sum(bits_per_subcarrier))
+                if bits_per_ofdm_symbol == 0:
+                    raise ValueError("All subcarriers have zero order - cannot transmit data")
+                num_ofdm_symbols = self.num_bits // bits_per_ofdm_symbol
+            else:
+                raise ValueError("Either num_bits or num_symbols must be specified")
+
+            # Create adaptive bits generator
+            bits_generator: IGenerator = AdaptiveBitsGenerator(
+                bits_per_subcarrier=bits_per_subcarrier,
+                num_ofdm_symbols=num_ofdm_symbols,
+            )
+
+            total_bits = bits_generator.get_total_bits()
+
+        else:
+            # Fixed constellation mode (original behavior)
+            constellation_orders = np.full(
+                self.num_subcarriers, self.constellation_order, dtype=np.int64
+            )
+            constellation_mapper = self.CONSTELLATION_SCHEME_MAPPERS.get(
+                self.constellation_scheme, QAMConstellationMapper
+            )(order=self.constellation_order)
+            bits_generator = RandomBitsGenerator()
+
+            # Calculate total bits
+            total_bits = self.num_bits
+            if self.num_symbols is not None:
+                total_bits = self.num_symbols * int(np.log2(self.constellation_order))
+                print(self.constellation_order)
 
         results.update(
             {
@@ -272,6 +405,9 @@ class Simulation:
                     if self.power_allocation_type == PowerAllocationType.WATERFILLING
                     else "UNIFORM"
                 ),
+                "adaptive_modulation_mode": self.adaptive_modulation_mode.name,
+                "constellation_order_per_subcarrier": constellation_orders.tolist(),
+                "water_level": water_level,
                 "title": (
                     f"{prefix_scheme.acronym}-"
                     f"{self.modulator_type.name}-{self.equalizator_type.name}"
@@ -286,10 +422,6 @@ class Simulation:
         print("=" * 50)
         print("Generating bits stream...")
         print("=" * 50)
-
-        total_bits = self.num_bits
-        if self.num_symbols is not None:
-            total_bits = self.num_symbols * int(np.log2(self.constellation_order))
 
         if total_bits is None:
             raise ValueError("Total bits could not be determined.")
@@ -323,29 +455,33 @@ class Simulation:
         print(f"Applying Power Allocation ({self.power_allocation_type.name})...")
         print("=" * 50)
 
-        channel_frequency_response = np.fft.fft(channel_impulse_response, self.num_subcarriers)
-        channel_gains = np.abs(channel_frequency_response) ** 2
-        noise_power = 10 ** (-self.snr_db / 10)
+        # Calculate power allocation for fixed mode (adaptive mode already calculated it above)
+        if self.adaptive_modulation_mode == AdaptiveModulationMode.FIXED:
+            if self.power_allocation_type == PowerAllocationType.WATERFILLING:
+                power_allocator = WaterfillingPowerAllocation(
+                    total_power=1.0,
+                    channel_gains=channel_gains,
+                    noise_power=noise_power,
+                )
+                power_allocation = power_allocator.allocate()
 
-        if self.power_allocation_type == PowerAllocationType.WATERFILLING:
-            power_allocator = WaterfillingPowerAllocation(
-                total_power=1.0,
-                channel_gains=channel_gains,
-                noise_power=noise_power,
-            )
-        else:
-            power_allocator = UniformPowerAllocation(
-                total_power=1.0,
-                num_subcarriers=self.num_subcarriers,
-            )
+                # Calculate water level for results
+                floor = noise_power / channel_gains
+                water_level_array = power_allocation + floor
+                water_level = float(np.mean(water_level_array[power_allocation > 1e-10]))
+            else:
+                power_allocator = UniformPowerAllocation(
+                    total_power=1.0,
+                    num_subcarriers=self.num_subcarriers,
+                )
+                power_allocation = power_allocator.allocate()
 
-        power_allocation = power_allocator.allocate()
         self._log(
             f"Power allocation computed: min={power_allocation.min():.6f}, max={power_allocation.max():.6f}"
         )
 
         # Apply power allocation to parallel data
-        parallel_data = parallel_data * np.sqrt(power_allocation)
+        # parallel_data = parallel_data * np.sqrt(power_allocation)
         results["allocated_power"] = power_allocation.tolist()
 
         print("=" * 50)
@@ -373,6 +509,8 @@ class Simulation:
         print("Transmitting signal through the channel...")
         print("=" * 50)
 
+        # Start timing
+        start_time = time.perf_counter()
         received_signal = channel.transmit(serial_signal)
 
         print(f"Received Signal Shape: {received_signal.shape}")
@@ -392,13 +530,15 @@ class Simulation:
         demodulated_data = modulator.demodulate(received_parallel_signal)
         print(f"Demodulated Data Shape: {demodulated_data.shape}")
 
-        # Compensate for power allocation
+        # Normalize demodulated data regardless of power allocation
         print("=" * 50)
-        print("Compensating for Power Allocation...")
+        print("Normalizing Demodulated Data...")
         print("=" * 50)
-        power_sqrt = np.sqrt(power_allocation)
-        power_sqrt[power_sqrt < 1e-10] = 1.0  # Avoid division by near-zero
-        demodulated_data = demodulated_data / power_sqrt
+        for sc_idx in range(self.num_subcarriers):
+            power = np.mean(np.abs(demodulated_data[:, sc_idx]) ** 2)
+            if power > 1e-10:
+                demodulated_data[:, sc_idx] /= np.sqrt(power)
+
         self._log("Power allocation compensation applied")
 
         print("=" * 50)
@@ -441,6 +581,7 @@ class Simulation:
                 "bit_errors": bit_errors,
                 "total_bits": total_bits,
                 "bit_error_rate": ber,
+                "received_symbols": demodulated_serial_data,  # Store for visualization
             }
         )
 
@@ -450,44 +591,166 @@ class Simulation:
         plt.clf()
         plt.cla()
 
-        plt.figure(figsize=(8, 8))
+        # Determine if we should create adaptive visualization
+        is_adaptive = self.adaptive_modulation_mode == AdaptiveModulationMode.CAPACITY_BASED
 
-        # Plot received Symbols
-        plt.scatter(
-            demodulated_serial_data.real,
-            demodulated_serial_data.imag,
-            color="blue",
-            marker=".",
-            alpha=0.1,
-            label="Received Symbols",
-        )
+        if is_adaptive:
+            # Create figure with two subplots for adaptive mode
+            fig = plt.figure(figsize=(16, 8))
 
-        # Plot the constellation diagram
-        ideal_points = constellation_mapper.constellation
-        plt.scatter(
-            ideal_points.real,
-            ideal_points.imag,
-            color="red",
-            marker="o",
-            label="Ideal Constellation Points",
-        )
+            # Subplot 1: Constellation diagram
+            ax1 = plt.subplot(1, 2, 1)
 
-        # Set plot attributes
-        plt.title(f"{results['title']}")
-        plt.xlabel("In-Phase")
-        plt.ylabel("Quadrature")
-        plt.axhline(0, color="black", lw=0.5)
-        plt.axvline(0, color="black", lw=0.5)
-        plt.legend(loc="upper right")
-        plt.grid(True)
-        plt.xlim([-1.5, 1.5])
-        plt.ylim([-1.5, 1.5])
-        plt.axis("equal")
+            # Plot received symbols (all in one color for simplicity)
+            ax1.scatter(
+                demodulated_serial_data.real,
+                demodulated_serial_data.imag,
+                color="blue",
+                marker=".",
+                alpha=0.1,
+                label="Received Symbols",
+            )
 
-        # Add text box with BER, SNR, and PAPR
-        textstr = f"BER: {ber:.6f}\n" f"SNR: {self.snr_db} dB\n" f"PAPR: {papr_db:.2f} dB"
-        plt.gcf().text(0.15, 0.75, textstr, fontsize=10, bbox=dict(facecolor="white", alpha=0.5))
-        plt.tight_layout()
+            # Plot ideal constellation points (combined from all orders)
+            ideal_points = constellation_mapper.constellation
+            ax1.scatter(
+                ideal_points.real,
+                ideal_points.imag,
+                color="red",
+                marker="o",
+                s=50,
+                label="Ideal Constellation Points",
+            )
+
+            # Set plot attributes
+            ax1.set_title("Constellation Diagram (Adaptive Modulation)")
+            ax1.set_xlabel("In-Phase")
+            ax1.set_ylabel("Quadrature")
+            ax1.axhline(0, color="black", lw=0.5)
+            ax1.axvline(0, color="black", lw=0.5)
+            ax1.legend(loc="upper right")
+            ax1.grid(True)
+            ax1.set_xlim(-1.5, 1.5)
+            ax1.set_ylim(-1.5, 1.5)
+            ax1.set_aspect("equal")
+
+            # Add text box with BER, SNR, and PAPR
+            textstr = f"BER: {ber:.6f}\nSNR: {self.snr_db} dB\nPAPR: {papr_db:.2f} dB"
+            ax1.text(
+                0.05,
+                0.95,
+                textstr,
+                transform=ax1.transAxes,
+                fontsize=10,
+                verticalalignment="top",
+                bbox=dict(facecolor="white", alpha=0.8),
+            )
+
+            # Subplot 2: Constellation order distribution
+            ax2 = plt.subplot(1, 2, 2)
+
+            # Count constellation orders
+            unique_orders, counts = np.unique(
+                constellation_orders[constellation_orders > 0], return_counts=True
+            )
+
+            # Create bar chart
+            from matplotlib import cm
+
+            colors = cm.viridis(np.linspace(0, 1, len(unique_orders)))  # type: ignore
+            bars = ax2.bar(range(len(unique_orders)), counts, color=colors, edgecolor="black")
+
+            # Set labels and title
+            ax2.set_xlabel("Constellation Order (M-QAM/PSK)")
+            ax2.set_ylabel("Number of Subcarriers")
+            ax2.set_title("Constellation Order Distribution")
+            ax2.set_xticks(range(len(unique_orders)))
+            ax2.set_xticklabels([f"{int(order)}" for order in unique_orders])
+            ax2.grid(True, axis="y", alpha=0.3)
+
+            # Add value labels on bars
+            for bar, count in zip(bars, counts):
+                height = bar.get_height()
+                ax2.text(
+                    bar.get_x() + bar.get_width() / 2.0,
+                    height,
+                    f"{int(count)}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=9,
+                )
+
+            # Add statistics text box
+            active_subcarriers = np.sum(constellation_orders > 0)
+            inactive_subcarriers = np.sum(constellation_orders == 0)
+            avg_order = (
+                np.mean(constellation_orders[constellation_orders > 0])
+                if active_subcarriers > 0
+                else 0
+            )
+
+            stats_text = (
+                f"Total Subcarriers: {self.num_subcarriers}\n"
+                f"Active: {active_subcarriers}\n"
+                f"Inactive: {inactive_subcarriers}\n"
+                f"Avg Order: {avg_order:.1f}"
+            )
+
+            ax2.text(
+                0.98,
+                0.98,
+                stats_text,
+                transform=ax2.transAxes,
+                fontsize=9,
+                verticalalignment="top",
+                horizontalalignment="right",
+                bbox=dict(facecolor="white", alpha=0.8),
+            )
+
+            plt.tight_layout()
+
+        else:
+            # Original single plot for fixed mode
+            plt.figure(figsize=(8, 8))
+
+            # Plot received Symbols
+            plt.scatter(
+                demodulated_serial_data.real,
+                demodulated_serial_data.imag,
+                color="blue",
+                marker=".",
+                alpha=0.1,
+                label="Received Symbols",
+            )
+
+            # Plot the constellation diagram
+            ideal_points = constellation_mapper.constellation
+            plt.scatter(
+                ideal_points.real,
+                ideal_points.imag,
+                color="red",
+                marker="o",
+                label="Ideal Constellation Points",
+            )
+
+            # Set plot attributes
+            plt.title(f"{results['title']}")
+            plt.xlabel("In-Phase")
+            plt.ylabel("Quadrature")
+            plt.axhline(0, color="black", lw=0.5)
+            plt.axvline(0, color="black", lw=0.5)
+            plt.legend(loc="upper right")
+            plt.grid(True)
+            plt.xlim([-1.5, 1.5])
+            plt.ylim([-1.5, 1.5])
+            plt.axis("equal")
+
+            # Add text box with BER, SNR, and PAPR
+            textstr = f"BER: {ber:.6f}\n" f"SNR: {self.snr_db} dB\n" f"PAPR: {papr_db:.2f} dB"
+            plt.gcf().text(
+                0.15, 0.75, textstr, fontsize=10, bbox=dict(facecolor="white", alpha=0.5)
+            )
+            plt.tight_layout()
 
         # Save the plot to a BytesIO object
         img_buffer = BytesIO()
@@ -504,6 +767,18 @@ class Simulation:
         # Close the bits stream
         bits.close()
 
+        # Calculate transmission timing metrics
+        end_time = time.perf_counter()
+        transmission_time_ms = (end_time - start_time) * 1000
+        bitrate_mbps = (total_bits) / 1e6
+
+        results["transmission_time_ms"] = transmission_time_ms
+        results["bitrate_mbps"] = bitrate_mbps
+
+        print("=" * 50)
+        print(f"Transmission time: {transmission_time_ms:.2f} ms")
+        print(f"Bitrate: {bitrate_mbps:.2f} Mbps")
         print("Simulation completed.")
+        print("=" * 50)
 
         return results

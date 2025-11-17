@@ -57,3 +57,11 @@ class PowerAllocationType(str, Enum):
 
     def __str__(self):
         return self.value
+
+
+class AdaptiveModulationMode(str, Enum):
+    FIXED = "FIXED"
+    CAPACITY_BASED = "CAPACITY_BASED"
+
+    def __str__(self):
+        return self.value

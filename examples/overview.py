@@ -50,7 +50,7 @@ def read_bits_from_stream(bit_stream: Union[BinaryIO, List[int]]) -> List[int]:
 subcarriers = 64
 
 # Channel creation
-snr = 15.0  # in dB
+snr = 20.0  # in dB
 snr_linear = 10 ** (snr / 10)
 print(f"SNR (dB): {snr}")
 print(f"SNR (linear scale): {snr_linear}")
@@ -76,6 +76,9 @@ capacity_per_subcarrier = calculate_capacity_per_subcarrier(
     channel_gains=(np.abs(channel_model.get_frequency_response(n_fft=subcarriers)) ** 2),
     noise_power=(1 / snr_linear),
 )
+
+print(f"Channel Gains: {np.abs(channel_model.get_frequency_response(n_fft=subcarriers)) ** 2}")
+print(f"Noise Power: {1 / snr_linear}")
 
 print(f"Capacity per Subcarrier: {np.int64(capacity_per_subcarrier)}")
 

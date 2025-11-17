@@ -1,0 +1,20 @@
+{
+    "num_bands": 64,
+    "signal_noise_ratios": [15, 20, 25],
+    "channel_model_path": "config/channel_models/Lin-Phoong_P1.npy",
+    "channel_type": "CUSTOM",
+    "noise_type": "AWGN",
+    "num_bits": null,
+    "num_symbols": 1000,
+    "constellation_order": 16,
+    "constellation_type": "QAM",
+    "prefix_type": "CYCLIC",
+    "prefix_length_ratio": 1.0,
+    "equalization_method": "MMSE",
+    "modulation_type": "OFDM",
+    "power_allocation_type": "WATERFILLING",
+    "adaptive_modulation_mode": "FIXED",
+    "min_constellation_order": 4,
+    "max_constellation_order": 256,
+    "capacity_scaling_factor": 1.0
+}
