@@ -91,9 +91,9 @@ class SimulationSettings(BaseSettings):
         256,
         description="Maximum constellation order for adaptive modulation (must be power of 2)",
     )
-    capacity_scaling_factor: float = Field(
-        1.0,
-        description="Scaling factor for capacity-based constellation order selection",
+    desired_symbol_error_rate: float = Field(
+        1e-3,
+        description="Desired symbol error rate for adaptive modulation",
     )
 
     def __str__(self):
@@ -141,9 +141,11 @@ class SimulationSettings(BaseSettings):
             raise ValueError(f"Constellation order must be a power of 2, got {v}.")
         return v
 
-    @field_validator("capacity_scaling_factor")
+    @field_validator("desired_symbol_error_rate")
     @classmethod
-    def validate_capacity_scaling_factor(cls, v):
+    def validate_desired_symbol_error_rate(cls, v):
         if v <= 0:
-            raise ValueError("capacity_scaling_factor must be positive.")
+            raise ValueError("desired_symbol_error_rate must be positive.")
+        if v >= 0.5:
+            raise ValueError("desired_symbol_error_rate must be less than 0.5.")
         return v

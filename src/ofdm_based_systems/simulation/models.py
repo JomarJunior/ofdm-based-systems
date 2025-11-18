@@ -119,7 +119,7 @@ class Simulation:
         adaptive_modulation_mode: AdaptiveModulationMode = AdaptiveModulationMode.FIXED,
         min_constellation_order: int = 4,
         max_constellation_order: int = 256,
-        capacity_scaling_factor: float = 1.0,
+        desired_symbol_error_rate: float = 1e-3,
         channel_impulse_response: Optional[NDArray[np.complex128]] = None,
         verbose: bool = True,
     ):
@@ -143,7 +143,7 @@ class Simulation:
         self.adaptive_modulation_mode = adaptive_modulation_mode
         self.min_constellation_order = min_constellation_order
         self.max_constellation_order = max_constellation_order
-        self.capacity_scaling_factor = capacity_scaling_factor
+        self.desired_symbol_error_rate = desired_symbol_error_rate
         self.channel_impulse_response = channel_impulse_response
         self.verbose = verbose
 
@@ -205,7 +205,7 @@ class Simulation:
                 adaptive_modulation_mode=simulation_settings.adaptive_modulation_mode,
                 min_constellation_order=simulation_settings.min_constellation_order,
                 max_constellation_order=simulation_settings.max_constellation_order,
-                capacity_scaling_factor=simulation_settings.capacity_scaling_factor,
+                desired_symbol_error_rate=simulation_settings.desired_symbol_error_rate,
                 channel_impulse_response=channel_impulse_response,
             )
             simulations.append(simulation)
@@ -294,13 +294,13 @@ class Simulation:
             # Calculate power allocation first (needed for capacity calculation)
             if self.power_allocation_type == PowerAllocationType.WATERFILLING:
                 power_allocator = WaterfillingPowerAllocation(
-                    total_power=1.0,
+                    total_power=self.num_subcarriers,
                     channel_gains=channel_gains,
                     noise_power=noise_power,
                 )
             else:
                 power_allocator = UniformPowerAllocation(
-                    total_power=1.0,
+                    total_power=self.num_subcarriers,
                     num_subcarriers=self.num_subcarriers,
                 )
 
@@ -313,23 +313,43 @@ class Simulation:
                 water_level = float(np.mean(water_level_array[power_allocation > 1e-10]))
 
             # Calculate capacity per subcarrier
-            capacity = calculate_capacity_per_subcarrier(
-                power_allocation, channel_gains, noise_power
-            )
+            # capacity = calculate_capacity_per_subcarrier(
+            #     power_allocation, channel_gains, noise_power
+            # )
 
-            # Determine constellation orders based on capacity
-            base_mapper_class = self.CONSTELLATION_SCHEME_MAPPERS.get(
+            # # Determine constellation orders based on capacity
+            # base_mapper_class = self.CONSTELLATION_SCHEME_MAPPERS.get(
+            #     self.constellation_scheme, QAMConstellationMapper
+            # )
+            # constellation_orders = calculate_constellation_orders(
+            #     capacity=capacity,
+            #     min_order=self.min_constellation_order,
+            #     max_order=self.max_constellation_order,
+            #     scaling_factor=self.capacity_scaling_factor,
+            #     base_mapper_class=base_mapper_class,
+            # )
+
+            # Calculate capacity per subcarrier using gap function method
+            base_mapper_class: IConstellationMapper = self.CONSTELLATION_SCHEME_MAPPERS.get(
                 self.constellation_scheme, QAMConstellationMapper
             )
-            constellation_orders = calculate_constellation_orders(
-                capacity=capacity,
-                min_order=self.min_constellation_order,
-                max_order=self.max_constellation_order,
-                scaling_factor=self.capacity_scaling_factor,
-                base_mapper_class=base_mapper_class,
-            )
+            def calculate_snr_per_subcarrier(subcarrier_power, channel_gain):
+                print("*"*20)
+                print(f"SNR: {subcarrier_power * channel_gain / noise_power}")
+                print("*"*20)
+                return subcarrier_power * channel_gain / noise_power
 
-            print(f"  Capacity range: {capacity.min():.2f} - {capacity.max():.2f} bits/symbol")
+            constellation_orders = [
+                base_mapper_class.calculate_bit_loading_order(
+                    ser=self.desired_symbol_error_rate, snr=calculate_snr_per_subcarrier(p_alloc, h_gain)
+                ) for p_alloc, h_gain in zip(power_allocation, channel_gains)
+            ]
+            constellation_orders = np.array(constellation_orders, dtype=np.int64)
+            print("Adaptive Constellation Orders per Subcarrier:")
+            print(constellation_orders)
+
+
+            # print(f"  Capacity range: {capacity.min():.2f} - {capacity.max():.2f} bits/symbol")
             print(
                 f"  Constellation orders: min={constellation_orders[constellation_orders>0].min() if np.any(constellation_orders>0) else 0}, "
                 f"max={constellation_orders.max()}, "
@@ -531,15 +551,15 @@ class Simulation:
         print(f"Demodulated Data Shape: {demodulated_data.shape}")
 
         # Normalize demodulated data regardless of power allocation
-        print("=" * 50)
-        print("Normalizing Demodulated Data...")
-        print("=" * 50)
-        for sc_idx in range(self.num_subcarriers):
-            power = np.mean(np.abs(demodulated_data[:, sc_idx]) ** 2)
-            if power > 1e-10:
-                demodulated_data[:, sc_idx] /= np.sqrt(power)
+        # print("=" * 50)
+        # print("Normalizing Demodulated Data...")
+        # print("=" * 50)
+        # for sc_idx in range(self.num_subcarriers):
+        #     power = np.mean(np.abs(demodulated_data[:, sc_idx]) ** 2)
+        #     if power > 1e-10:
+        #         demodulated_data[:, sc_idx] /= np.sqrt(power)
 
-        self._log("Power allocation compensation applied")
+        # self._log("Power allocation compensation applied")
 
         print("=" * 50)
         print("Parallel to Serial Conversion of Demodulated Data...")
@@ -548,18 +568,18 @@ class Simulation:
         print(f"Demodulated Serial Data Shape: {demodulated_serial_data.shape}")
 
         # Normalize symbols to constellation scale
-        print("=" * 50)
-        print("Normalizing symbols for constellation demapping...")
-        print("=" * 50)
-        # Calculate current average power of received symbols
-        current_avg_power = np.mean(np.abs(demodulated_serial_data) ** 2)
-        # Constellation has unit average power, so normalize to unit power
-        if current_avg_power > 1e-10:  # Avoid division by zero
-            normalization_factor = np.sqrt(current_avg_power)
-            demodulated_serial_data = demodulated_serial_data / normalization_factor
-            self._log(f"Normalized symbols: avg power {current_avg_power:.6f} -> 1.0")
-        else:
-            self._log("Warning: Received signal has near-zero power, skipping normalization")
+        # print("=" * 50)
+        # print("Normalizing symbols for constellation demapping...")
+        # print("=" * 50)
+        # # Calculate current average power of received symbols
+        # current_avg_power = np.mean(np.abs(demodulated_serial_data) ** 2)
+        # # Constellation has unit average power, so normalize to unit power
+        # if current_avg_power > 1e-10:  # Avoid division by zero
+        #     normalization_factor = np.sqrt(current_avg_power)
+        #     demodulated_serial_data = demodulated_serial_data / normalization_factor
+        #     self._log(f"Normalized symbols: avg power {current_avg_power:.6f} -> 1.0")
+        # else:
+        #     self._log("Warning: Received signal has near-zero power, skipping normalization")
 
         print("=" * 50)
         print("Constellation Demapping...")
@@ -575,12 +595,22 @@ class Simulation:
         print("=" * 50)
         print(f"Bit Errors: {bit_errors} out of {total_bits} bits")
         print(f"Bit Error Rate (BER): {ber:.6f}")
+
+        # Calculate Symbol Error Rate (SER) for information
+        recoded_symbols = constellation_mapper.encode(received_bits)
+        symbol_errors = np.sum(symbols != recoded_symbols)
+        ser = symbol_errors / len(symbols) if len(symbols) > 0 else 0.0
+        print(f"Symbol Errors: {symbol_errors} out of {len(symbols)} symbols")
+        print(f"Symbol Error Rate (SER): {ser:.6f}")
         print("=" * 50)
+
         results.update(
             {
                 "bit_errors": bit_errors,
+                "symbol_errors": symbol_errors,
                 "total_bits": total_bits,
                 "bit_error_rate": ber,
+                "symbol_error_rate": ser,
                 "received_symbols": demodulated_serial_data,  # Store for visualization
             }
         )

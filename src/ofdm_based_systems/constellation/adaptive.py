@@ -263,6 +263,9 @@ class AdaptiveConstellationMapper(IConstellationMapper):
                 result_bytes.append(byte_value)
 
         return BytesIO(bytes(result_bytes))
+    
+    def calculate_bit_loading_order(self, ser: float, snr: float) -> int:
+        raise NotImplementedError("This method is not implemented in AdaptiveConstellationMapper.")
 
 
 def calculate_constellation_orders(

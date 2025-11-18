@@ -1,3 +1,5 @@
+# Fixes for Adaptative Modulation and Coding
+
 - Must include the Gap function for calculating the constellation order based on desired erro probability.
 - Each constellation type has its own Gap function implementation.
 
@@ -29,7 +31,10 @@ $$
 ## PSK Constellation Gap Function
 
 $$
-\Gama^* = \left(\right)
+    \Gamma^* = \left(\frac{Q^-1 (SER/2)}{\sqrt{2}\pi}\right)^2
+$$
+$$
+    \Gamma = \frac{\sqrt{\gamma \Gamma^*}}{1 - \sqrt{\Gamma^*/\gamma} }
 $$
 
 ## Time Variant Channels / Doppler

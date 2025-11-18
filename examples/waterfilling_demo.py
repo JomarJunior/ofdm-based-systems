@@ -31,7 +31,7 @@ def demonstrate_waterfilling():
 
     # Create frequency-selective channel
     # Simulate multipath: h(t) = δ(t) + 0.7·δ(t-1) + 0.4·δ(t-2) + 0.2·δ(t-3)
-    channel_impulse = np.array([1.0, 0.7, 0.4, 0.2], dtype=np.complex128)
+    channel_impulse = np.load("config/channel_models/Lin-Phoong_P2.npy")
     channel_response = np.fft.fft(channel_impulse, n=num_subcarriers)
     channel_gains = np.abs(channel_response) ** 2
 

@@ -363,8 +363,10 @@ def plot_water_level_diagram(
 def plot_adaptive_constellation_diagram(
     received_symbols: NDArray[np.complex128],
     constellation_orders: NDArray[np.int64],
+    constellation_title: str,
     num_subcarriers: int,
     ber: float,
+    ser: float,
     snr_db: float,
     papr_db: float,
     figsize: Tuple[float, float] = (14, 6),
@@ -429,7 +431,7 @@ def plot_adaptive_constellation_diagram(
             alpha=0.3,
             s=20,
             c=[colors[idx]],
-            label=f"{int(order)}-QAM ({np.sum(subcarrier_mask)} subcarriers)",
+            label=f"{int(order)}-{constellation_title} ({np.sum(subcarrier_mask)} subcarriers)",
         )
 
     # Add ideal constellation points for each order
@@ -467,7 +469,7 @@ def plot_adaptive_constellation_diagram(
     ax1.set_aspect("equal")
 
     # Add statistics text box
-    textstr = f"BER: {ber:.6f}\nSNR: {snr_db} dB\nPAPR: {papr_db:.2f} dB"
+    textstr = f"BER: {ber:.6f}\nSER: {ser:.6f}\nSNR: {snr_db} dB\nPAPR: {papr_db:.2f} dB"
     ax1.text(
         0.98,
         0.02,

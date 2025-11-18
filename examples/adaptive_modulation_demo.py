@@ -38,7 +38,7 @@ def run_fixed_modulation(
 
     # For FIXED mode: Calculate total constellation symbols needed
     # Each OFDM symbol requires num_subcarriers constellation symbols
-    constellation_order = 64
+    constellation_order = 16
     total_constellation_symbols = num_subcarriers * num_ofdm_symbols
 
     settings = SimulationSettings(
@@ -59,7 +59,7 @@ def run_fixed_modulation(
         adaptive_modulation_mode=AdaptiveModulationMode.FIXED,
         min_constellation_order=4,
         max_constellation_order=2048,
-        capacity_scaling_factor=1.0,
+        desired_symbol_error_rate=1e-3,
     )
 
     simulations = Simulation.create_from_simulation_settings(settings)
@@ -83,7 +83,7 @@ def run_adaptive_modulation(
     channel_path: str,
     min_order: int = 4,
     max_order: int = 2048,
-    scaling_factor: float = 1.0,
+    desired_ser: float = 1e-3,
 ):
     """Run simulation with adaptive constellation order selection."""
     print("\n" + "=" * 70)
@@ -108,7 +108,7 @@ def run_adaptive_modulation(
         adaptive_modulation_mode=AdaptiveModulationMode.CAPACITY_BASED,
         min_constellation_order=min_order,
         max_constellation_order=max_order,
-        capacity_scaling_factor=scaling_factor,
+        desired_symbol_error_rate=desired_ser,
     )
 
     simulations = Simulation.create_from_simulation_settings(settings)
@@ -123,7 +123,7 @@ def run_adaptive_modulation(
     print(f"\nAdaptive Mode Results:")
     print(f"  - Min Order: {min_order}")
     print(f"  - Max Order: {max_order}")
-    print(f"  - Capacity Scaling Factor: {scaling_factor}")
+    print(f"  - Desired Symbol Error Rate: {desired_ser}")
     print(f"  - Active Subcarriers: {len(active_orders)}/{num_subcarriers}")
     print(f"  - Unique Orders Used: {unique_orders}")
     print(f"  - Average Order: {np.mean(active_orders):.1f}")
@@ -164,8 +164,10 @@ def visualize_constellation_diagram(results, num_subcarriers: int, filename: str
     fig = plot_adaptive_constellation_diagram(
         received_symbols=received_symbols,
         constellation_orders=orders,
+        constellation_title=results.get("constellation_scheme", ""),
         num_subcarriers=num_subcarriers,
         ber=results["bit_error_rate"],
+        ser=results.get("symbol_error_rate", 0.0),
         snr_db=results.get("snr_db", 20.0),
         papr_db=papr_db,
         figsize=(14, 6),
@@ -202,7 +204,7 @@ def visualize_comparison(fixed_results, adaptive_results, num_subcarriers: int):
         range(len(unique_orders)), counts, color=colors, edgecolor="black", linewidth=1.5
     )
 
-    ax1.set_xlabel("Constellation Order (M-QAM)", fontsize=12)
+    ax1.set_xlabel(f"Constellation Order (M-{adaptive_results.get('constellation_scheme', '')})", fontsize=12)
     ax1.set_ylabel("Number of Subcarriers", fontsize=12)
     ax1.set_title("Adaptive Modulation - Order Distribution", fontsize=14, fontweight="bold")
     ax1.set_xticks(range(len(unique_orders)))
@@ -263,7 +265,7 @@ def visualize_comparison(fixed_results, adaptive_results, num_subcarriers: int):
 
     # Subplot 4: Performance Comparison
     ax4 = plt.subplot(2, 2, 4)
-    modes = ["Fixed\n(16-QAM)", "Adaptive\n(Capacity-Based)"]
+    modes = [f"Fixed\n(16-{fixed_results.get('constellation_scheme', '')})", f"Adaptive\n(Capacity-Based)"]
     bitrates = [fixed_results["bitrate_mbps"], adaptive_results["bitrate_mbps"]]
     bers = [fixed_results["bit_error_rate"], adaptive_results["bit_error_rate"]]
 
@@ -333,7 +335,7 @@ def main():
     num_ofdm_symbols = (
         10000  # Number of OFDM symbols (must result in total symbols divisible by num_subcarriers)
     )
-    snr_db = 20.0
+    snr_db = 15.0
     channel_path = "config/channel_models/Lin-Phoong_P2.npy"
 
     print(f"\nConfiguration:")
@@ -353,7 +355,7 @@ def main():
     print("=" * 70)
 
     # Conservative (scaling_factor = 0.7)
-    print("\n--- Configuration 1: Conservative (scaling_factor = 0.7) ---")
+    print("\n--- Configuration 1: Conservative (SER = 1e-4) ---")
     adaptive_conservative = run_adaptive_modulation(
         num_subcarriers,
         num_ofdm_symbols,
@@ -361,11 +363,11 @@ def main():
         channel_path,
         min_order=4,
         max_order=2048,
-        scaling_factor=2.5,
+        desired_ser=1e-4,
     )
 
     # Balanced (scaling_factor = 0.85)
-    print("\n--- Configuration 2: Balanced (scaling_factor = 0.85) ---")
+    print("\n--- Configuration 2: Balanced (SER = 1e-3) ---")
     adaptive_balanced = run_adaptive_modulation(
         num_subcarriers,
         num_ofdm_symbols,
@@ -373,11 +375,11 @@ def main():
         channel_path,
         min_order=4,
         max_order=2048,
-        scaling_factor=2**2,
+        desired_ser=1e-3,
     )
 
     # Aggressive (scaling_factor = 1.0)
-    print("\n--- Configuration 3: Aggressive (scaling_factor = 1.0) ---")
+    print("\n--- Configuration 3: Aggressive (SER = 1e-2) ---")
     adaptive_aggressive = run_adaptive_modulation(
         num_subcarriers,
         num_ofdm_symbols,
@@ -385,7 +387,7 @@ def main():
         channel_path,
         min_order=4,
         max_order=2048,
-        scaling_factor=2**4,
+        desired_ser=1e-2,
     )
 
     # Generate constellation diagrams for each configuration
@@ -404,7 +406,7 @@ def main():
         adaptive_aggressive, num_subcarriers, "constellation_adaptive_aggressive.png"
     )
 
-    # Visualize the balanced configuration comparison
+    #Visualize the balanced configuration comparison
     visualize_comparison(fixed_results, adaptive_balanced, num_subcarriers)
 
     # Summary
@@ -412,34 +414,34 @@ def main():
     print("SUMMARY")
     print("=" * 70)
     print("\nBitrate Comparison:")
-    print(f"  Fixed (16-QAM):             {fixed_results['bitrate_mbps']:.2f} Mbps")
-    print(f"  Adaptive (Conservative):    {adaptive_conservative['bitrate_mbps']:.2f} Mbps")
-    print(f"  Adaptive (Balanced):        {adaptive_balanced['bitrate_mbps']:.2f} Mbps")
-    print(f"  Adaptive (Aggressive):      {adaptive_aggressive['bitrate_mbps']:.2f} Mbps")
+    print(f"  Fixed (16-{fixed_results.get('constellation_scheme', '')}):             {fixed_results['bitrate_mbps']:.2f} Mbps")
+    print(f"  Adaptive (SER = 1e-4):    {adaptive_conservative['bitrate_mbps']:.2f} Mbps")
+    print(f"  Adaptive (SER = 1e-3):        {adaptive_balanced['bitrate_mbps']:.2f} Mbps")
+    print(f"  Adaptive (SER = 1e-2):      {adaptive_aggressive['bitrate_mbps']:.2f} Mbps")
 
     print("\nBER Comparison:")
-    print(f"  Fixed (16-QAM):             {fixed_results['bit_error_rate']:.6f}")
-    print(f"  Adaptive (Conservative):    {adaptive_conservative['bit_error_rate']:.6f}")
-    print(f"  Adaptive (Balanced):        {adaptive_balanced['bit_error_rate']:.6f}")
-    print(f"  Adaptive (Aggressive):      {adaptive_aggressive['bit_error_rate']:.6f}")
+    print(f"  Fixed (16-{fixed_results.get('constellation_scheme', '')}):             {fixed_results['bit_error_rate']:.6f}")
+    print(f"  Adaptive (SER = 1e-4):    {adaptive_conservative['bit_error_rate']:.6f}")
+    print(f"  Adaptive (SER = 1e-3):        {adaptive_balanced['bit_error_rate']:.6f}")
+    print(f"  Adaptive (SER = 1e-2):      {adaptive_aggressive['bit_error_rate']:.6f}")
 
     print("\nTransmission Time Comparison:")
-    print(f"  Fixed (16-QAM):             {fixed_results['transmission_time_ms']:.2f} ms")
-    print(f"  Adaptive (Conservative):    {adaptive_conservative['transmission_time_ms']:.2f} ms")
-    print(f"  Adaptive (Balanced):        {adaptive_balanced['transmission_time_ms']:.2f} ms")
-    print(f"  Adaptive (Aggressive):      {adaptive_aggressive['transmission_time_ms']:.2f} ms")
+    print(f"  Fixed (16-{fixed_results.get('constellation_scheme', '')}):             {fixed_results['transmission_time_ms']:.2f} ms")
+    print(f"  Adaptive (SER = 1e-4):    {adaptive_conservative['transmission_time_ms']:.2f} ms")
+    print(f"  Adaptive (SER = 1e-3):        {adaptive_balanced['transmission_time_ms']:.2f} ms")
+    print(f"  Adaptive (SER = 1e-2):      {adaptive_aggressive['transmission_time_ms']:.2f} ms")
 
     print("\nTotal Bits Comparison:")
-    print(f"  Fixed (16-QAM):             {fixed_results['total_bits']}")
-    print(f"  Adaptive (Conservative):    {adaptive_conservative['total_bits']}")
-    print(f"  Adaptive (Balanced):        {adaptive_balanced['total_bits']}")
-    print(f"  Adaptive (Aggressive):      {adaptive_aggressive['total_bits']}")
+    print(f"  Fixed (16-{fixed_results.get('constellation_scheme', '')}):             {fixed_results['total_bits']}")
+    print(f"  Adaptive (SER = 1e-4):    {adaptive_conservative['total_bits']}")
+    print(f"  Adaptive (SER = 1e-3):        {adaptive_balanced['total_bits']}")
+    print(f"  Adaptive (SER = 1e-2):      {adaptive_aggressive['total_bits']}")
 
     print("\nTotal sent symbols comparison:")
-    print(f"  Fixed (16-QAM):             {len(fixed_results['received_symbols'])}")
-    print(f"  Adaptive (Conservative):    {len(adaptive_conservative['received_symbols'])}")
-    print(f"  Adaptive (Balanced):        {len(adaptive_balanced['received_symbols'])}")
-    print(f"  Adaptive (Aggressive):      {len(adaptive_aggressive['received_symbols'])}")
+    print(f"  Fixed (16-{fixed_results.get('constellation_scheme', '')}):             {len(fixed_results['received_symbols'])}")
+    print(f"  Adaptive (SER = 1e-4):    {len(adaptive_conservative['received_symbols'])}")
+    print(f"  Adaptive (SER = 1e-3):        {len(adaptive_balanced['received_symbols'])}")
+    print(f"  Adaptive (SER = 1e-2):      {len(adaptive_aggressive['received_symbols'])}")
 
     print("\nKey Observations:")
     print("  • Adaptive modulation adjusts constellation orders based on channel quality")
@@ -453,9 +455,9 @@ def main():
     print("=" * 70)
     print("\nGenerated Files:")
     print("  • constellation_fixed.png - Fixed modulation constellation diagram")
-    print("  • constellation_adaptive_conservative.png - Conservative adaptive (0.7 scaling)")
-    print("  • constellation_adaptive_balanced.png - Balanced adaptive (0.85 scaling)")
-    print("  • constellation_adaptive_aggressive.png - Aggressive adaptive (1.0 scaling)")
+    print("  • constellation_adaptive_conservative.png - Conservative adaptive (SER = 1e-4)")
+    print("  • constellation_adaptive_balanced.png - Balanced adaptive (SER = 1e-3)")
+    print("  • constellation_adaptive_aggressive.png - Aggressive adaptive (SER = 1e-2)")
     print("  • adaptive_modulation_comparison.png - Performance comparison")
     print("\n" + "=" * 70)
 
