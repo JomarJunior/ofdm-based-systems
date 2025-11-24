@@ -1,6 +1,6 @@
 import os
 from io import BytesIO
-from typing import Any, BinaryIO, Dict, List, Optional
+from typing import Any, BinaryIO, Dict, List, Optional, Type
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -330,24 +330,28 @@ class Simulation:
             # )
 
             # Calculate capacity per subcarrier using gap function method
-            base_mapper_class: IConstellationMapper = self.CONSTELLATION_SCHEME_MAPPERS.get(
+            base_mapper_class: Type[IConstellationMapper] = self.CONSTELLATION_SCHEME_MAPPERS.get(
                 self.constellation_scheme, QAMConstellationMapper
             )
+
             def calculate_snr_per_subcarrier(subcarrier_power, channel_gain):
-                print("*"*20)
+                print("*" * 20)
                 print(f"SNR: {subcarrier_power * channel_gain / noise_power}")
-                print("*"*20)
+                print("*" * 20)
                 return subcarrier_power * channel_gain / noise_power
 
-            constellation_orders = [
-                base_mapper_class.calculate_bit_loading_order(
-                    ser=self.desired_symbol_error_rate, snr=calculate_snr_per_subcarrier(p_alloc, h_gain)
-                ) for p_alloc, h_gain in zip(power_allocation, channel_gains)
-            ]
-            constellation_orders = np.array(constellation_orders, dtype=np.int64)
+            constellation_orders = np.array(
+                [
+                    base_mapper_class.calculate_bit_loading_order(
+                        ser=self.desired_symbol_error_rate,
+                        snr=calculate_snr_per_subcarrier(p_alloc, h_gain),
+                    )
+                    for p_alloc, h_gain in zip(power_allocation, channel_gains)
+                ],
+                dtype=np.int64,
+            )
             print("Adaptive Constellation Orders per Subcarrier:")
             print(constellation_orders)
-
 
             # print(f"  Capacity range: {capacity.min():.2f} - {capacity.max():.2f} bits/symbol")
             print(

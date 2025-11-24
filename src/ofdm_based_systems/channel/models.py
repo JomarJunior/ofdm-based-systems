@@ -29,6 +29,11 @@ class ChannelModel:
             self.frequency_response_cache[n_fft] = np.fft.fft(self.impulse_response, n=n_fft)
         return self.frequency_response_cache[n_fft]
 
+    def get_gains(self, n_fft: int) -> NDArray[np.float64]:
+        """Get the channel gains (magnitude squared of frequency response) for a given FFT size."""
+        frequency_response = self.get_frequency_response(n_fft)
+        return np.abs(frequency_response) ** 2
+
     def normalize_impulse_response(
         self, impulse_response: NDArray[np.complex128]
     ) -> NDArray[np.complex128]:
@@ -49,10 +54,9 @@ class ChannelModel:
         # Remove the extra samples added by convolution
         convolved_signal = convolved_signal[: signal.shape[0]]
 
-        # Normalize convolved signal to maintain original power
-        convolved_signal = convolved_signal / np.sqrt(np.mean(np.abs(convolved_signal) ** 2))
-
         # Add noise to the convolved signal
-        noisy_signal = self.noise_model.add_noise(convolved_signal, self.snr_db)
+        noisy_signal = self.noise_model.add_noise(
+            convolved_signal.astype(np.complex128), self.snr_db
+        )
 
         return noisy_signal

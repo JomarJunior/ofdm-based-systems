@@ -2,10 +2,10 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 from io import BytesIO
 from typing import BinaryIO, Dict, List, Tuple, Type, Union
-from scipy.stats import norm
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.stats import norm
 
 
 class ISymbolClassifier(ABC):
@@ -293,27 +293,33 @@ class QAMConstellationMapper(IConstellationMapper):
 
         # Return bits as a bytes object
         return BytesIO(bytes(packed_bytes))
-    
+
     @classmethod
     def calculate_bit_loading_order(cls, ser: float, snr: float) -> int:
+        print("=" * 20)
         # Calculate the inverse Q-function value for SER/2
         q_inv = norm.isf(ser / 4)
+        print(f"Q-inv value for SER={ser}: {q_inv}")
         # Calculate the gap SNR using the formula for QAM
-        gamma = ((1/3) * (q_inv ** 2))
+        gamma = (1 / 3) * (q_inv**2)
+        print(f"Gap SNR (gamma) for SER={ser}: {gamma}")
         # Determine the maximum bits per symbol that can be supported
         bits_per_symbol = int(np.round(np.log2(1 + (snr / gamma))))
+        print(f"Calculated bits per symbol for SER={ser}, SNR={snr}: {bits_per_symbol}")
 
         # bits_per_symbol must be even for square QAM
         if bits_per_symbol % 2 != 0:
+            print("Bits per symbol is not even, reducing by 1 to make it even.")
             bits_per_symbol -= 1
-
 
         # if bits_per_symbol is negative or zero, return 0
         if bits_per_symbol <= 0:
+            print("Bits per symbol is less than or equal to 0, returning 0.")
             return 0
 
-        return 2 ** bits_per_symbol
-    
+        print(f"Final bits per symbol for QAM: {bits_per_symbol}")
+        return 2**bits_per_symbol
+
 
 class PSKConstellationMapper(IConstellationMapper):
     """
@@ -455,14 +461,14 @@ class PSKConstellationMapper(IConstellationMapper):
         # Calculate the inverse Q-function value for SER/2
         q_inv = norm.isf(ser / 2)
         # Calculate the gap SNR using the formula for PSK
-        gamma_star = (q_inv ** 2) / (2 * (np.pi ** 2))
-        gamma = (np.sqrt(snr * gamma_star)) / (1 - np.sqrt(gamma_star / snr))
+        gamma_star = (q_inv**2) / (2 * (np.pi**2))
+        gamma = (np.sqrt(snr * gamma_star)) / (1 - np.sqrt(gamma_star / (snr + 1e-10)))
 
         # Determine the maximum bits per symbol that can be supported
-        bits_per_symbol = int(np.floor(np.log2(1 + snr / (gamma + 1e-10))))
+        bits_per_symbol = int(np.floor(np.log2(1 + snr / (gamma + 1e-10)) + 1e-10))
 
         # bits_per_symbol must be at least 1 for PSK
         if bits_per_symbol <= 0:
             return 0
 
-        return 2 ** bits_per_symbol
+        return 2**bits_per_symbol

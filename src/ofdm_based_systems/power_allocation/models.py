@@ -155,9 +155,10 @@ class WaterfillingPowerAllocation(IPowerAllocation):
             4. Adjust μ until sum(P) ≈ P_total
             5. Normalize for exact power constraint
         """
+        # @book: pg ~603
         # Calculate inverse SNR - the "floor" of the container
         # Higher floor = worse channel = less power allocated
-        floor = self.noise_power / self.channel_gains
+        floor = self.noise_power / (self.channel_gains * len(self.channel_gains))
 
         # Binary search for optimal water level
         water_level = self._find_water_level(floor)

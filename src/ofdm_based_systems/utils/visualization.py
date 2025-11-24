@@ -391,7 +391,10 @@ def plot_adaptive_constellation_diagram(
     Returns:
         Matplotlib Figure object with constellation diagram
     """
-    from ofdm_based_systems.constellation.models import QAMConstellationMapper
+    from ofdm_based_systems.constellation.models import (
+        PSKConstellationMapper,
+        QAMConstellationMapper,
+    )
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
 
@@ -435,8 +438,10 @@ def plot_adaptive_constellation_diagram(
         )
 
     # Add ideal constellation points for each order
-    for idx, order in enumerate(unique_orders):
-        try:
+    constellation_type = "QAM" if "QAM" in constellation_title.upper() else "PSK"
+
+    if constellation_type == "QAM":
+        for idx, order in enumerate(unique_orders):
             # Create mapper for this order
             mapper = QAMConstellationMapper(order=int(order))
             ideal_points = mapper.constellation
@@ -455,9 +460,33 @@ def plot_adaptive_constellation_diagram(
                 s=100,
                 linewidths=2,
             )
-        except Exception:
-            # Skip if mapper creation fails
-            pass
+
+            from ofdm_based_systems.constellation.models import (
+                PSKConstellationMapper,
+            )
+
+    if constellation_type == "PSK":
+        for idx, order in enumerate(unique_orders):
+            mapper = PSKConstellationMapper(order=int(order))
+            ideal_points = mapper.constellation
+
+            # Normalize ideal points
+            if max_magnitude > 0:
+                ideal_normalized = ideal_points / max_magnitude
+            else:
+                ideal_normalized = ideal_points
+
+            # Plot ideal points
+            ax1.scatter(
+                ideal_normalized.real,
+                ideal_normalized.imag,
+                marker="x",
+                s=100,
+                linewidths=2,
+            )
+
+    if constellation_type not in ["QAM", "PSK"]:
+        raise ValueError(f"Unsupported constellation type: {constellation_type}")
 
     ax1.set_title(f"{title_prefix} - Constellation Diagram", fontsize=12, fontweight="bold")
     ax1.set_xlabel("In-Phase (I)", fontsize=11)
@@ -538,5 +567,9 @@ def plot_adaptive_constellation_diagram(
         bbox=dict(boxstyle="round", facecolor="white", alpha=0.9, edgecolor="black"),
     )
 
+    plt.tight_layout()
+    return fig
+    plt.tight_layout()
+    return fig
     plt.tight_layout()
     return fig
